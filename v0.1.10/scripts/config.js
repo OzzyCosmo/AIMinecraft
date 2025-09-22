@@ -37,9 +37,9 @@ export const AO_SKY_STRENGTH = 0.65;
 export const AO_SKY_STEPS = 5;
 export const CLOUD_LAYER_BOUNDS = { min: 52, max: 78 };
 export const CLOUD_QUALITY_PRESETS = {
-  low: { steps: 24 },
-  medium: { steps: 48 },
-  high: { steps: 80 }
+  low: { steps: 20 },
+  medium: { steps: 36 },
+  high: { steps: 56 }
 };
 export const CLOUD_DEFAULTS = {
   enabled: true,
@@ -55,6 +55,7 @@ export const CLOUD_WIND_DIRECTION = (() => {
   return { x: x / length, z: z / length };
 })();
 export const CLOUD_WIND_SPEED_SCALE = 0.05;
+export const CLOUD_NOISE_TEXTURE_SIZE = 64;
 export const SUN_LIGHT_DIRECTION = (() => {
   const length = Math.hypot(80, 120, 60);
   return { x: 80 / length, y: 120 / length, z: 60 / length };
@@ -75,6 +76,7 @@ export const CLOUD_VERTEX_SHADER = `
   }
 `;
 
+
 export const CLOUD_FRAGMENT_SHADER = `
   precision highp float;
 
@@ -92,11 +94,24 @@ export const CLOUD_FRAGMENT_SHADER = `
   uniform float quality;
   uniform float enableClouds;
   uniform vec2 layerHeights;
+#ifdef USE_CLOUD_TEXTURES
+  uniform sampler3D cloudBaseTex;
+  uniform sampler3D cloudDetailTex;
+#endif
 
-  const int MAX_STEPS = 96;
+  const int MAX_STEPS = 80;
   const float BASE_NOISE_SCALE = 0.015;
   const float DETAIL_NOISE_SCALE = 0.055;
 
+#ifdef USE_CLOUD_TEXTURES
+  float sampleBaseNoise(vec3 p) {
+    return texture(cloudBaseTex, fract(p)).r;
+  }
+
+  float sampleDetailNoise(vec3 p) {
+    return texture(cloudDetailTex, fract(p)).r;
+  }
+#else
   float hash(vec3 p) {
     return fract(sin(dot(p, vec3(12.9898, 78.233, 39.425))) * 43758.5453);
   }
@@ -124,16 +139,51 @@ export const CLOUD_FRAGMENT_SHADER = `
     return mix(nxy0, nxy1, u.z);
   }
 
-  float fbm(vec3 p) {
+  float sampleBaseNoise(vec3 p) {
     float value = 0.0;
     float amplitude = 0.5;
     float frequency = 1.0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 4; i++) {
       value += noise(p * frequency) * amplitude;
       frequency *= 2.0;
       amplitude *= 0.5;
     }
     return value;
+  }
+
+  float sampleDetailNoise(vec3 p) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+    for (int i = 0; i < 3; i++) {
+      value += noise(p * frequency) * amplitude;
+      frequency *= 2.0;
+      amplitude *= 0.5;
+    }
+    return value;
+  }
+#endif
+
+  vec3 applyWind(vec3 p, vec2 offset) {
+    return vec3(p.x + offset.x, p.y, p.z + offset.y);
+  }
+
+  float sampleCloudShape(vec3 samplePos, vec2 offset) {
+    vec3 windSamplePos = applyWind(samplePos, offset);
+    float baseShape = sampleBaseNoise(windSamplePos * BASE_NOISE_SCALE);
+    float detailShape = sampleDetailNoise(windSamplePos * DETAIL_NOISE_SCALE);
+    return baseShape + detailShape * 0.55;
+  }
+
+  float computeLocalDensity(vec3 samplePos, vec2 offset, float coverageThreshold, float densityStrength, float slabMin, float slabMax) {
+    float baseDensity = smoothstep(coverageThreshold, 1.0, sampleCloudShape(samplePos, offset));
+    float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
+                          (1.0 - smoothstep(slabMax - 6.0, slabMax, samplePos.y));
+    return baseDensity * densityStrength * verticalBlend;
+  }
+
+  float rand(vec2 co) {
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
   }
 
   vec3 skyGradient(vec3 dir) {
@@ -143,22 +193,29 @@ export const CLOUD_FRAGMENT_SHADER = `
     return mix(horizon, zenith, t);
   }
 
-  float calcShadow(vec3 pos, vec3 lightDir, float coverageThreshold, float baseDensity, vec2 bounds, vec2 windOffset) {
+  float calcShadow(vec3 pos, vec3 lightDir, float coverageThreshold, float densityStrength, vec2 bounds, vec2 windOffset) {
+    if (densityStrength <= 0.001) {
+      return 1.0;
+    }
+
     float shadow = 1.0;
-    float stepLen = 3.0;
-    vec3 samplePos = pos + lightDir * stepLen;
-    for (int i = 0; i < 5; i++) {
+    float stepLen = 4.2;
+    float jitter = rand(pos.xz * 0.02 + windOffset * 0.35);
+    vec3 samplePos = pos + lightDir * (stepLen * (0.35 + jitter * 0.65));
+
+    for (int i = 0; i < 4; i++) {
       if (samplePos.y < bounds.x || samplePos.y > bounds.y) {
         break;
       }
-      vec3 windSample = vec3(samplePos.x + windOffset.x, samplePos.y, samplePos.z + windOffset.y);
-      float shape = fbm(windSample * BASE_NOISE_SCALE);
-      float detail = fbm(windSample * DETAIL_NOISE_SCALE);
-      float densitySample = smoothstep(coverageThreshold, 1.0, shape + detail * 0.45) * baseDensity;
-      shadow -= densitySample * 0.15;
+      float densitySample = computeLocalDensity(samplePos, windOffset, coverageThreshold, densityStrength, bounds.x, bounds.y);
+      shadow -= densitySample * 0.22;
+      if (shadow <= 0.12) {
+        return 0.12;
+      }
       samplePos += lightDir * stepLen;
     }
-    return clamp(shadow, 0.25, 1.0);
+
+    return clamp(shadow, 0.3, 1.0);
   }
 
   void main() {
@@ -196,34 +253,54 @@ export const CLOUD_FRAGMENT_SHADER = `
       return;
     }
 
-    float steps = clamp(quality, 8.0, float(MAX_STEPS));
-    float stepLength = (end - start) / steps;
+    float steps = clamp(quality, 16.0, float(MAX_STEPS));
+    float stepLength = max(1.2, (end - start) / steps);
+    float searchStep = stepLength * 3.5;
     vec2 windSampleOffset = windOffset;
 
     float coverageThreshold = mix(0.85, 0.2, clamp(coverage, 0.0, 1.0));
     float densityStrength = max(0.0, density);
 
+    if (densityStrength <= 0.0001) {
+      gl_FragColor = vec4(skyColor, 1.0);
+      return;
+    }
+
     vec3 accumulatedColor = vec3(0.0);
     float accumulatedAlpha = 0.0;
 
+    vec2 pixelCoord = vUv * iResolution;
+    float rayRandom = rand(pixelCoord + vec2(iTime * 0.123, iTime * 0.527));
     float t = start;
+
+    float coarseT = start;
     for (int i = 0; i < MAX_STEPS; i++) {
-      if (float(i) >= steps) {
+      if (coarseT >= end) {
+        t = coarseT;
         break;
       }
-      vec3 samplePos = ro + rd * (t + stepLength * 0.5);
+      vec3 searchPos = ro + rd * (coarseT + searchStep * 0.5);
+      float probeDensity = computeLocalDensity(searchPos, windSampleOffset, coverageThreshold, densityStrength, slabMin, slabMax);
+      if (probeDensity > 0.015) {
+        t = max(start, coarseT - stepLength * 1.5);
+        break;
+      }
+      coarseT += searchStep;
+      t = coarseT;
+    }
+
+    for (int i = 0; i < MAX_STEPS; i++) {
+      if (t >= end || float(i) >= steps) {
+        break;
+      }
+
+      float progress = clamp(float(i) / max(1.0, steps - 1.0), 0.0, 1.0);
+      float jitter = mix(rayRandom, 0.5, progress);
+      vec3 samplePos = ro + rd * (t + jitter * stepLength);
+      rayRandom = fract(rayRandom + 0.61803398875);
       t += stepLength;
 
-      vec3 windSamplePos = vec3(samplePos.x + windOffset.x, samplePos.y, samplePos.z + windOffset.y);
-
-      float baseShape = fbm(windSamplePos * BASE_NOISE_SCALE);
-      float detailShape = fbm(windSamplePos * DETAIL_NOISE_SCALE);
-      float cloudShape = baseShape + detailShape * 0.45;
-
-      float baseDensity = smoothstep(coverageThreshold, 1.0, cloudShape);
-      float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
-                            (1.0 - smoothstep(slabMax - 6.0, slabMax, samplePos.y));
-      float localDensity = baseDensity * densityStrength * verticalBlend;
+      float localDensity = computeLocalDensity(samplePos, windSampleOffset, coverageThreshold, densityStrength, slabMin, slabMax);
 
       if (localDensity <= 0.0005) {
         continue;
@@ -238,7 +315,7 @@ export const CLOUD_FRAGMENT_SHADER = `
       float rimLight = pow(clamp(dot(normalize(sunDir + vec3(0.0, 0.35, 0.0)), rd), 0.0, 1.0), 6.0) * 0.28;
       float lighting = clamp(directLight + forwardScatter + rimLight, 0.1, 1.3);
 
-      float absorption = 1.0 - exp(-localDensity * stepLength * 1.35);
+      float absorption = 1.0 - exp(-localDensity * stepLength * 1.25);
       absorption = clamp(absorption, 0.0, 1.0);
 
       vec3 bottomColor = vec3(0.46, 0.52, 0.61);

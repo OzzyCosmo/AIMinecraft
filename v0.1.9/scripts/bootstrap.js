@@ -191,7 +191,8 @@ export function initialize() {
         '#include <worldpos_vertex>\n  vWorldPosition = worldPosition.xyz;'
       );
 
-      const shadowChunk = `
+      
+const shadowChunk = `
 varying vec3 vWorldPosition;
 uniform float cloudShadowEnable;
 uniform float cloudShadowCoverage;
@@ -201,7 +202,7 @@ uniform vec3 cloudShadowSunDir;
 uniform vec2 cloudShadowLayerHeights;
 uniform float cloudShadowIntensity;
 
-const int CLOUD_SHADOW_STEPS = 16;
+const int CLOUD_SHADOW_STEPS = 12;
 const float CLOUD_BASE_NOISE_SCALE = 0.015;
 const float CLOUD_DETAIL_NOISE_SCALE = 0.055;
 
@@ -230,11 +231,27 @@ float cloudNoise3(vec3 p) {
   return mix(nxy0, nxy1, u.z);
 }
 
+float cloudRand(vec2 co) {
+  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+float cloudFbm4(vec3 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  float frequency = 1.0;
+  for (int i = 0; i < 4; i++) {
+    value += cloudNoise3(p * frequency) * amplitude;
+    frequency *= 2.0;
+    amplitude *= 0.5;
+  }
+  return value;
+}
+
 float cloudFbm3(vec3 p) {
   float value = 0.0;
   float amplitude = 0.5;
   float frequency = 1.0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 3; i++) {
     value += cloudNoise3(p * frequency) * amplitude;
     frequency *= 2.0;
     amplitude *= 0.5;
@@ -262,18 +279,25 @@ float computeCloudShadow(vec3 worldPos) {
   float stepLength = (end - start) / steps;
   float coverageThreshold = mix(0.85, 0.2, clamp(cloudShadowCoverage, 0.0, 1.0));
   float densityStrength = max(0.0, cloudShadowDensity);
+  if (densityStrength <= 0.001) {
+    return 1.0;
+  }
   float transmittance = 1.0;
   float t = start;
+  float jitter = cloudRand(worldPos.xz * 0.015 + cloudShadowOffset * 0.5);
   for (int i = 0; i < CLOUD_SHADOW_STEPS; i++) {
-    if (float(i) >= steps) {
+    if (t >= end || float(i) >= steps) {
       break;
     }
-    vec3 samplePos = worldPos + dir * (t + stepLength * 0.5);
+    float progress = clamp(float(i) / max(1.0, steps - 1.0), 0.0, 1.0);
+    float sampleOffset = mix(jitter, 0.5, progress);
+    vec3 samplePos = worldPos + dir * (t + sampleOffset * stepLength);
     t += stepLength;
+    jitter = fract(jitter + 0.61803398875);
     vec3 windSamplePos = vec3(samplePos.x + cloudShadowOffset.x, samplePos.y, samplePos.z + cloudShadowOffset.y);
-    float baseShape = cloudFbm3(windSamplePos * CLOUD_BASE_NOISE_SCALE);
+    float baseShape = cloudFbm4(windSamplePos * CLOUD_BASE_NOISE_SCALE);
     float detailShape = cloudFbm3(windSamplePos * CLOUD_DETAIL_NOISE_SCALE);
-    float cloudShape = baseShape + detailShape * 0.45;
+    float cloudShape = baseShape + detailShape * 0.55;
     float baseDensity = smoothstep(coverageThreshold, 1.0, cloudShape);
     float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
                           (1.0 - smoothstep(slabMax - 6.0, slabMax, samplePos.y));
@@ -281,7 +305,7 @@ float computeCloudShadow(vec3 worldPos) {
     if (localDensity <= 0.0005) {
       continue;
     }
-    float absorption = localDensity * stepLength * 1.2;
+    float absorption = localDensity * stepLength * 1.1;
     transmittance *= exp(-absorption);
     if (transmittance <= 0.08) {
       return max(0.05, transmittance);
@@ -290,6 +314,7 @@ float computeCloudShadow(vec3 worldPos) {
   return clamp(transmittance, 0.05, 1.0);
 }
 `;
+
 
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <common>',

@@ -37,9 +37,9 @@ export const AO_SKY_STRENGTH = 0.65;
 export const AO_SKY_STEPS = 5;
 export const CLOUD_LAYER_BOUNDS = { min: 52, max: 78 };
 export const CLOUD_QUALITY_PRESETS = {
-  low: { steps: 24 },
-  medium: { steps: 48 },
-  high: { steps: 80 }
+  low: { steps: 20 },
+  medium: { steps: 36 },
+  high: { steps: 56 }
 };
 export const CLOUD_DEFAULTS = {
   enabled: true,
@@ -75,6 +75,7 @@ export const CLOUD_VERTEX_SHADER = `
   }
 `;
 
+
 export const CLOUD_FRAGMENT_SHADER = `
   precision highp float;
 
@@ -93,7 +94,7 @@ export const CLOUD_FRAGMENT_SHADER = `
   uniform float enableClouds;
   uniform vec2 layerHeights;
 
-  const int MAX_STEPS = 96;
+  const int MAX_STEPS = 80;
   const float BASE_NOISE_SCALE = 0.015;
   const float DETAIL_NOISE_SCALE = 0.055;
 
@@ -124,11 +125,27 @@ export const CLOUD_FRAGMENT_SHADER = `
     return mix(nxy0, nxy1, u.z);
   }
 
-  float fbm(vec3 p) {
+  float rand(vec2 co) {
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  float fbm4(vec3 p) {
     float value = 0.0;
     float amplitude = 0.5;
     float frequency = 1.0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 4; i++) {
+      value += noise(p * frequency) * amplitude;
+      frequency *= 2.0;
+      amplitude *= 0.5;
+    }
+    return value;
+  }
+
+  float fbm3(vec3 p) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+    for (int i = 0; i < 3; i++) {
       value += noise(p * frequency) * amplitude;
       frequency *= 2.0;
       amplitude *= 0.5;
@@ -143,22 +160,29 @@ export const CLOUD_FRAGMENT_SHADER = `
     return mix(horizon, zenith, t);
   }
 
-  float calcShadow(vec3 pos, vec3 lightDir, float coverageThreshold, float baseDensity, vec2 bounds, vec2 windOffset) {
+  float calcShadow(vec3 pos, vec3 lightDir, float coverageThreshold, float densityStrength, vec2 bounds, vec2 windOffset) {
+    if (densityStrength <= 0.001) {
+      return 1.0;
+    }
+
     float shadow = 1.0;
-    float stepLen = 3.0;
-    vec3 samplePos = pos + lightDir * stepLen;
-    for (int i = 0; i < 5; i++) {
+    float stepLen = 3.4;
+    float jitter = rand(pos.xz * 0.015 + windOffset * 0.5);
+    vec3 samplePos = pos + lightDir * (stepLen * (0.5 + jitter * 0.5));
+
+    for (int i = 0; i < 4; i++) {
       if (samplePos.y < bounds.x || samplePos.y > bounds.y) {
         break;
       }
       vec3 windSample = vec3(samplePos.x + windOffset.x, samplePos.y, samplePos.z + windOffset.y);
-      float shape = fbm(windSample * BASE_NOISE_SCALE);
-      float detail = fbm(windSample * DETAIL_NOISE_SCALE);
-      float densitySample = smoothstep(coverageThreshold, 1.0, shape + detail * 0.45) * baseDensity;
-      shadow -= densitySample * 0.15;
+      float shape = fbm4(windSample * BASE_NOISE_SCALE);
+      float detail = fbm3(windSample * DETAIL_NOISE_SCALE);
+      float densitySample = smoothstep(coverageThreshold, 1.0, shape + detail * 0.55) * densityStrength;
+      shadow -= densitySample * 0.18;
       samplePos += lightDir * stepLen;
     }
-    return clamp(shadow, 0.25, 1.0);
+
+    return clamp(shadow, 0.3, 1.0);
   }
 
   void main() {
@@ -196,7 +220,7 @@ export const CLOUD_FRAGMENT_SHADER = `
       return;
     }
 
-    float steps = clamp(quality, 8.0, float(MAX_STEPS));
+    float steps = clamp(quality, 12.0, float(MAX_STEPS));
     float stepLength = (end - start) / steps;
     vec2 windSampleOffset = windOffset;
 
@@ -206,19 +230,26 @@ export const CLOUD_FRAGMENT_SHADER = `
     vec3 accumulatedColor = vec3(0.0);
     float accumulatedAlpha = 0.0;
 
+    vec2 pixelCoord = vUv * iResolution;
+    float rayRandom = rand(pixelCoord + vec2(iTime * 0.123, iTime * 0.527));
     float t = start;
+
     for (int i = 0; i < MAX_STEPS; i++) {
-      if (float(i) >= steps) {
+      if (t >= end || float(i) >= steps) {
         break;
       }
-      vec3 samplePos = ro + rd * (t + stepLength * 0.5);
+
+      float progress = clamp(float(i) / max(1.0, steps - 1.0), 0.0, 1.0);
+      float jitter = mix(rayRandom, 0.5, progress);
+      vec3 samplePos = ro + rd * (t + jitter * stepLength);
+      rayRandom = fract(rayRandom + 0.61803398875);
       t += stepLength;
 
       vec3 windSamplePos = vec3(samplePos.x + windOffset.x, samplePos.y, samplePos.z + windOffset.y);
 
-      float baseShape = fbm(windSamplePos * BASE_NOISE_SCALE);
-      float detailShape = fbm(windSamplePos * DETAIL_NOISE_SCALE);
-      float cloudShape = baseShape + detailShape * 0.45;
+      float baseShape = fbm4(windSamplePos * BASE_NOISE_SCALE);
+      float detailShape = fbm3(windSamplePos * DETAIL_NOISE_SCALE);
+      float cloudShape = baseShape + detailShape * 0.55;
 
       float baseDensity = smoothstep(coverageThreshold, 1.0, cloudShape);
       float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
@@ -238,7 +269,7 @@ export const CLOUD_FRAGMENT_SHADER = `
       float rimLight = pow(clamp(dot(normalize(sunDir + vec3(0.0, 0.35, 0.0)), rd), 0.0, 1.0), 6.0) * 0.28;
       float lighting = clamp(directLight + forwardScatter + rimLight, 0.1, 1.3);
 
-      float absorption = 1.0 - exp(-localDensity * stepLength * 1.35);
+      float absorption = 1.0 - exp(-localDensity * stepLength * 1.25);
       absorption = clamp(absorption, 0.0, 1.0);
 
       vec3 bottomColor = vec3(0.46, 0.52, 0.61);

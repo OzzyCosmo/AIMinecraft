@@ -2,6 +2,27 @@
 
 Most recent entries appear first. Dates use YYYY-MM-DD (ISO-8601)
 
+## v0.1.11 - 2025-09-20
+- Snapshot stored at 'v0.1.11/index.html'.
+- Retuned the volumetric cloud march with adaptive step scaling, tighter search budgets, and density-gated shadows to cut high-quality GPU cost.
+- Mirrored the adaptive sampling inside terrain cloud shadows so world lighting matches the faster sky pass.
+- Reduced default quality presets to leaner step counts while preserving coverage and lighting balance across settings.
+- Added an overlay version badge to make it obvious which snapshot a local server is hosting.
+
+## v0.1.10 - 2025-09-20
+- Snapshot stored at 'v0.1.10/index.html'.
+- Replaced procedural FBM in the cloud shader with precomputed 3D noise textures to slash raymarch ALU cost while preserving detail.
+- Added adaptive empty-space skipping and denser lighting fallbacks so high-quality marches converge in far fewer steps.
+- Mirrored the texture-driven sampling inside terrain cloud shadows for consistent shading and lower fragment workload.
+- Gated the new path behind WebGL2 checks and kept the legacy noise path as a fallback for older browsers.
+
+## v0.1.9 - 2025-09-19
+- Snapshot stored at 'v0.1.9/index.html'.
+- Reworked cloud raymarch with jittered stepping and fewer samples to cut GPU cost on high settings.
+- Reduced FBM octaves and tuned density blending to preserve structure with the lighter march.
+- Optimised terrain shadow projection to share the faster noise stack and early-outs when thin.
+- Updated quality presets so 'High' targets 56 steps instead of 80 while keeping visuals stable.
+
 ## v0.1.8 - 2025-09-19
 - Snapshot stored at 'v0.1.8/index.html'.
 - Volumetric cloud marching now darkens undersides, adds rim highlights, and improves absorption for richer lighting.

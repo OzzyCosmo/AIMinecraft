@@ -6,7 +6,7 @@ Main Tasks:
 - Research and create better lighting (AO + directional sky shading added in v0.1.4; next explore dynamic/global solutions)
 - Tools
 - Add block breaking audio/particle feedback
-- Volumetric Clouds Darker at Bottom (done in v0.1.8; volumetric layer now shades terrain)
+- Volumetric cloud performance (v0.1.11 retunes adaptive marching + shadows; monitor quality on low-end GPUs and browser caches)
 
 Creative Ideas (made by ai):
 - Seasonal biomes with temperature-based foliage changes

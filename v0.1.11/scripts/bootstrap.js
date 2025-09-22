@@ -1,11 +1,11 @@
 // --- Main bootstrap ------------------------------------------------------------------------
-import { CONFIG, settings, AO_STRENGTH_MAX, CLOUD_QUALITY_PRESETS, CLOUD_WIND_DIRECTION, CLOUD_WIND_SPEED_SCALE, CLOUD_LAYER_BOUNDS, CLOUD_VERTEX_SHADER, CLOUD_FRAGMENT_SHADER, SUN_LIGHT_DIRECTION } from './config.js';
-import { World } from './world.js';
-import { PlayerController } from './player.js';
-import { BlockInteraction } from './blockInteraction.js';
-import { buildTextureAtlas } from './textureAtlas.js';
-import { createHotbar, createMessageSystem, createDamageOverlay, createHighlightMesh } from './ui.js';
-import { TMP_LIGHT_VEC, SUN_LIGHT_OFFSET } from './utils.js';
+import { CONFIG, settings, AO_STRENGTH_MAX, CLOUD_QUALITY_PRESETS, CLOUD_WIND_DIRECTION, CLOUD_WIND_SPEED_SCALE, CLOUD_LAYER_BOUNDS, CLOUD_VERTEX_SHADER, CLOUD_FRAGMENT_SHADER, SUN_LIGHT_DIRECTION, CLOUD_NOISE_TEXTURE_SIZE } from './config.js?v=0.1.11';
+import { World } from './world.js?v=0.1.11';
+import { PlayerController } from './player.js?v=0.1.11';
+import { BlockInteraction } from './blockInteraction.js?v=0.1.11';
+import { buildTextureAtlas } from './textureAtlas.js?v=0.1.11';
+import { createHotbar, createMessageSystem, createDamageOverlay, createHighlightMesh } from './ui.js?v=0.1.11';
+import { TMP_LIGHT_VEC, SUN_LIGHT_OFFSET } from './utils.js?v=0.1.11';
 const THREE = window.THREE;
 if (!THREE) {
   throw new Error('THREE.js must be loaded before bootstrap.js');
@@ -54,6 +54,86 @@ export function initialize() {
   renderer.domElement.id = 'voxel-canvas';
   renderer.domElement.tabIndex = 0;
   document.body.appendChild(renderer.domElement);
+
+  const fract = (value) => value - Math.floor(value);
+  const hash3 = (x, y, z) => fract(Math.sin(x * 12.9898 + y * 78.233 + z * 39.425) * 43758.5453);
+  const lerp = THREE.MathUtils.lerp;
+
+  const noise3 = (x, y, z) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    const iz = Math.floor(z);
+    const fx = x - ix;
+    const fy = y - iy;
+    const fz = z - iz;
+    const ux = fx * fx * (3 - 2 * fx);
+    const uy = fy * fy * (3 - 2 * fy);
+    const uz = fz * fz * (3 - 2 * fz);
+
+    const n000 = hash3(ix, iy, iz);
+    const n100 = hash3(ix + 1, iy, iz);
+    const n010 = hash3(ix, iy + 1, iz);
+    const n110 = hash3(ix + 1, iy + 1, iz);
+    const n001 = hash3(ix, iy, iz + 1);
+    const n101 = hash3(ix + 1, iy, iz + 1);
+    const n011 = hash3(ix, iy + 1, iz + 1);
+    const n111 = hash3(ix + 1, iy + 1, iz + 1);
+
+    const nx00 = lerp(n000, n100, ux);
+    const nx10 = lerp(n010, n110, ux);
+    const nx01 = lerp(n001, n101, ux);
+    const nx11 = lerp(n011, n111, ux);
+    const nxy0 = lerp(nx00, nx10, uy);
+    const nxy1 = lerp(nx01, nx11, uy);
+    return lerp(nxy0, nxy1, uz);
+  };
+
+  const sampleFbm = (x, y, z, octaves, offset) => {
+    let value = 0;
+    let amplitude = 0.5;
+    let frequency = 1;
+    for (let i = 0; i < octaves; i++) {
+      value += noise3((x + offset[0]) * frequency, (y + offset[1]) * frequency, (z + offset[2]) * frequency) * amplitude;
+      frequency *= 2;
+      amplitude *= 0.5;
+    }
+    return value;
+  };
+
+  const createCloudDataTexture = (size, octaves, offset) => {
+    const data = new Float32Array(size * size * size);
+    const invSize = 1 / size;
+    let index = 0;
+    for (let z = 0; z < size; z++) {
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const px = (x + 0.5) * invSize;
+          const py = (y + 0.5) * invSize;
+          const pz = (z + 0.5) * invSize;
+          const value = sampleFbm(px, py, pz, octaves, offset);
+          data[index++] = Math.min(1, Math.max(0, value));
+        }
+      }
+    }
+    const texture = new THREE.Data3DTexture(data, size, size, size);
+    texture.format = THREE.RedFormat;
+    texture.type = THREE.FloatType;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = texture.wrapT = texture.wrapR = THREE.RepeatWrapping;
+    texture.unpackAlignment = 1;
+    texture.needsUpdate = true;
+    return texture;
+  };
+
+  const buildCloudNoiseTextures = (size) => {
+    const base = createCloudDataTexture(size, 4, [0.0, 0.0, 0.0]);
+    const detail = createCloudDataTexture(size, 3, [3.7, 7.3, 11.1]);
+    return { base, detail };
+  };
+
+  const supportsCloudTextures = renderer.capabilities.isWebGL2 && typeof THREE.Data3DTexture === 'function';
+  const cloudNoiseTextures = supportsCloudTextures ? buildCloudNoiseTextures(CLOUD_NOISE_TEXTURE_SIZE) : null;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x87ceeb, 70, 220);
@@ -111,6 +191,11 @@ export function initialize() {
     layerHeights: { value: new THREE.Vector2(CLOUD_LAYER_BOUNDS.min, CLOUD_LAYER_BOUNDS.max) }
   };
 
+  if (cloudNoiseTextures) {
+    cloudUniforms.cloudBaseTex = { value: cloudNoiseTextures.base };
+    cloudUniforms.cloudDetailTex = { value: cloudNoiseTextures.detail };
+  }
+
   const cloudShadowUniforms = {
     enable: { value: settings.clouds.enabled ? 1 : 0 },
     coverage: { value: settings.clouds.coverage },
@@ -120,6 +205,11 @@ export function initialize() {
     layerHeights: { value: new THREE.Vector2(CLOUD_LAYER_BOUNDS.min, CLOUD_LAYER_BOUNDS.max) },
     intensity: { value: 0.85 }
   };
+
+  if (cloudNoiseTextures) {
+    cloudShadowUniforms.baseTex = { value: cloudNoiseTextures.base };
+    cloudShadowUniforms.detailTex = { value: cloudNoiseTextures.detail };
+  }
 
   const cloudScene = new THREE.Scene();
   const cloudCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -131,6 +221,10 @@ export function initialize() {
     depthWrite: false,
     depthTest: false
   });
+  if (cloudNoiseTextures) {
+    cloudMaterial.defines = Object.assign({}, cloudMaterial.defines, { USE_CLOUD_TEXTURES: 1 });
+    cloudMaterial.needsUpdate = true;
+  }
   const cloudQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), cloudMaterial);
   cloudQuad.frustumCulled = false;
   cloudScene.add(cloudQuad);
@@ -181,6 +275,12 @@ export function initialize() {
       shader.uniforms.cloudShadowSunDir = cloudShadowUniforms.sunDir;
       shader.uniforms.cloudShadowLayerHeights = cloudShadowUniforms.layerHeights;
       shader.uniforms.cloudShadowIntensity = cloudShadowUniforms.intensity;
+      if (cloudNoiseTextures) {
+        shader.uniforms.cloudShadowBaseTex = cloudShadowUniforms.baseTex;
+        shader.uniforms.cloudShadowDetailTex = cloudShadowUniforms.detailTex;
+        shader.defines = shader.defines || {};
+        shader.defines.USE_CLOUD_TEXTURES = 1;
+      }
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
@@ -191,7 +291,8 @@ export function initialize() {
         '#include <worldpos_vertex>\n  vWorldPosition = worldPosition.xyz;'
       );
 
-      const shadowChunk = `
+      
+const shadowChunk = `
 varying vec3 vWorldPosition;
 uniform float cloudShadowEnable;
 uniform float cloudShadowCoverage;
@@ -200,11 +301,24 @@ uniform vec2 cloudShadowOffset;
 uniform vec3 cloudShadowSunDir;
 uniform vec2 cloudShadowLayerHeights;
 uniform float cloudShadowIntensity;
+#ifdef USE_CLOUD_TEXTURES
+uniform sampler3D cloudShadowBaseTex;
+uniform sampler3D cloudShadowDetailTex;
+#endif
 
-const int CLOUD_SHADOW_STEPS = 16;
+const int CLOUD_SHADOW_STEPS = 8;
 const float CLOUD_BASE_NOISE_SCALE = 0.015;
 const float CLOUD_DETAIL_NOISE_SCALE = 0.055;
 
+#ifdef USE_CLOUD_TEXTURES
+float cloudSampleBase(vec3 p) {
+  return texture(cloudShadowBaseTex, fract(p)).r;
+}
+
+float cloudSampleDetail(vec3 p) {
+  return texture(cloudShadowDetailTex, fract(p)).r;
+}
+#else
 float cloudHash3(vec3 p) {
   return fract(sin(dot(p, vec3(12.9898, 78.233, 39.425))) * 43758.5453);
 }
@@ -230,16 +344,53 @@ float cloudNoise3(vec3 p) {
   return mix(nxy0, nxy1, u.z);
 }
 
-float cloudFbm3(vec3 p) {
+float cloudSampleBase(vec3 p) {
   float value = 0.0;
   float amplitude = 0.5;
   float frequency = 1.0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 4; i++) {
     value += cloudNoise3(p * frequency) * amplitude;
     frequency *= 2.0;
     amplitude *= 0.5;
   }
   return value;
+}
+
+float cloudSampleDetail(vec3 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  float frequency = 1.0;
+  for (int i = 0; i < 3; i++) {
+    value += cloudNoise3(p * frequency) * amplitude;
+    frequency *= 2.0;
+    amplitude *= 0.5;
+  }
+  return value;
+}
+#endif
+
+vec3 cloudApplyWind(vec3 p, vec2 offset) {
+  return vec3(p.x + offset.x, p.y, p.z + offset.y);
+}
+
+float cloudSampleDensity(vec3 samplePos, vec2 offset, float coverageThreshold, float densityStrength, float slabMin, float slabMax) {
+  vec3 windSamplePos = cloudApplyWind(samplePos, offset);
+  float baseShape = cloudSampleBase(windSamplePos * CLOUD_BASE_NOISE_SCALE);
+  float detailShape = cloudSampleDetail(windSamplePos * CLOUD_DETAIL_NOISE_SCALE);
+  float cloudShape = baseShape + detailShape * 0.55;
+  float baseDensity = smoothstep(coverageThreshold, 1.0, cloudShape);
+  float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
+                        (1.0 - smoothstep(slabMax - 6.0, slabMax, samplePos.y));
+  return baseDensity * densityStrength * verticalBlend;
+}
+
+float cloudRand(vec2 co) {
+  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+float cloudStepFactor(float density) {
+  float tuned = clamp((density - 0.02) * 3.0, 0.0, 1.0);
+  return mix(1.75, 0.7, tuned);
 }
 
 float computeCloudShadow(vec3 worldPos) {
@@ -259,30 +410,32 @@ float computeCloudShadow(vec3 worldPos) {
     return 1.0;
   }
   float steps = float(CLOUD_SHADOW_STEPS);
-  float stepLength = (end - start) / steps;
+  float stepLength = max(1.4, (end - start) / steps);
   float coverageThreshold = mix(0.85, 0.2, clamp(cloudShadowCoverage, 0.0, 1.0));
   float densityStrength = max(0.0, cloudShadowDensity);
+  if (densityStrength <= 0.001) {
+    return 1.0;
+  }
   float transmittance = 1.0;
   float t = start;
+  float jitter = cloudRand(worldPos.xz * 0.02 + cloudShadowOffset * 0.35);
   for (int i = 0; i < CLOUD_SHADOW_STEPS; i++) {
-    if (float(i) >= steps) {
+    if (t >= end || float(i) >= steps) {
       break;
     }
-    vec3 samplePos = worldPos + dir * (t + stepLength * 0.5);
-    t += stepLength;
-    vec3 windSamplePos = vec3(samplePos.x + cloudShadowOffset.x, samplePos.y, samplePos.z + cloudShadowOffset.y);
-    float baseShape = cloudFbm3(windSamplePos * CLOUD_BASE_NOISE_SCALE);
-    float detailShape = cloudFbm3(windSamplePos * CLOUD_DETAIL_NOISE_SCALE);
-    float cloudShape = baseShape + detailShape * 0.45;
-    float baseDensity = smoothstep(coverageThreshold, 1.0, cloudShape);
-    float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
-                          (1.0 - smoothstep(slabMax - 6.0, slabMax, samplePos.y));
-    float localDensity = baseDensity * densityStrength * verticalBlend;
-    if (localDensity <= 0.0005) {
+    float progress = clamp((t - start) / max(0.001, end - start), 0.0, 1.0);
+    float sampleOffset = mix(jitter, 0.5, progress);
+    vec3 samplePos = worldPos + dir * (t + sampleOffset * stepLength);
+    jitter = fract(jitter + 0.61803398875);
+    float densitySample = cloudSampleDensity(samplePos, cloudShadowOffset, coverageThreshold, densityStrength, slabMin, slabMax);
+    if (densitySample <= 0.0004) {
+      t += stepLength * 1.9;
       continue;
     }
-    float absorption = localDensity * stepLength * 1.2;
+    float adaptiveStep = stepLength * cloudStepFactor(densitySample);
+    float absorption = densitySample * adaptiveStep * 0.95;
     transmittance *= exp(-absorption);
+    t += adaptiveStep;
     if (transmittance <= 0.08) {
       return max(0.05, transmittance);
     }
@@ -290,6 +443,7 @@ float computeCloudShadow(vec3 worldPos) {
   return clamp(transmittance, 0.05, 1.0);
 }
 `;
+
 
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <common>',
