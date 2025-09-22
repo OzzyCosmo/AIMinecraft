@@ -2,6 +2,13 @@
 
 Most recent entries appear first. Dates use YYYY-MM-DD (ISO-8601)
 
+## v0.1.11 - 2025-09-20
+- Snapshot stored at 'v0.1.11/index.html'.
+- Retuned the volumetric cloud march with adaptive step scaling, tighter search budgets, and density-gated shadows to cut high-quality GPU cost.
+- Mirrored the adaptive sampling inside terrain cloud shadows so world lighting matches the faster sky pass.
+- Reduced default quality presets to leaner step counts while preserving coverage and lighting balance across settings.
+- Added an overlay version badge to make it obvious which snapshot a local server is hosting.
+
 ## v0.1.10 - 2025-09-20
 - Snapshot stored at 'v0.1.10/index.html'.
 - Replaced procedural FBM in the cloud shader with precomputed 3D noise textures to slash raymarch ALU cost while preserving detail.
