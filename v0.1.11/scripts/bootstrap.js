@@ -191,6 +191,8 @@ export function initialize() {
     layerHeights: { value: new THREE.Vector2(CLOUD_LAYER_BOUNDS.min, CLOUD_LAYER_BOUNDS.max) }
   };
 
+  const cloudWindOffset = cloudUniforms.windOffset.value;
+
   if (cloudNoiseTextures) {
     cloudUniforms.cloudBaseTex = { value: cloudNoiseTextures.base };
     cloudUniforms.cloudDetailTex = { value: cloudNoiseTextures.detail };
