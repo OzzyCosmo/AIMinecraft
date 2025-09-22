@@ -87,7 +87,8 @@ export const CLOUD_FRAGMENT_SHADER = `
   uniform mat4 projMatrixInv;
   uniform vec3 sunDir;
   uniform float coverage;
-  uniform float density;\r\n  uniform vec2 windOffset;
+  uniform float density;
+  uniform vec2 windOffset;
   uniform float quality;
   uniform float enableClouds;
   uniform vec2 layerHeights;
