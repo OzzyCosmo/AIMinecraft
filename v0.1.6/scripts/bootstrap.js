@@ -205,7 +205,23 @@ export function initialize() {
   };
 
   const syncRenderDistanceInput = () => {
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
+    const preferredDistance = world.preferredRenderDistance;
+    const effectiveDistance = preferredDistance == null ? world.renderDistance : preferredDistance;
+    renderDistanceInput.value = String(effectiveDistance);
+=======
+    const preferred = world.preferredRenderDistance;
+    const renderDistanceValue = preferred === undefined || preferred === null ? world.renderDistance : preferred;
+    renderDistanceInput.value = String(renderDistanceValue);
+>>>>>>> theirs
+=======
     renderDistanceInput.value = String(world.preferredRenderDistance ?? world.renderDistance);
+>>>>>>> theirs
+=======
+    renderDistanceInput.value = String(world.preferredRenderDistance ?? world.renderDistance);
+>>>>>>> theirs
   };
 
   const closeSettings = () => {

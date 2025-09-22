@@ -121,6 +121,9 @@ export function initialize() {
     intensity: { value: 0.85 }
   };
 
+  const cloudWindOffset = cloudUniforms.windOffset.value;
+  const cloudShadowOffset = cloudShadowUniforms.offset.value;
+
   const cloudScene = new THREE.Scene();
   const cloudCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const cloudMaterial = new THREE.ShaderMaterial({
@@ -177,7 +180,8 @@ export function initialize() {
       shader.uniforms.cloudShadowEnable = cloudShadowUniforms.enable;
       shader.uniforms.cloudShadowCoverage = cloudShadowUniforms.coverage;
       shader.uniforms.cloudShadowDensity = cloudShadowUniforms.density;
-      shader.uniforms.cloudShadowOffset = cloudShadowUniforms.offset;\r\n      shader.uniforms.cloudShadowSunDir = cloudShadowUniforms.sunDir;
+      shader.uniforms.cloudShadowOffset = cloudShadowUniforms.offset;      
+      shader.uniforms.cloudShadowSunDir = cloudShadowUniforms.sunDir;
       shader.uniforms.cloudShadowLayerHeights = cloudShadowUniforms.layerHeights;
       shader.uniforms.cloudShadowIntensity = cloudShadowUniforms.intensity;
 
@@ -622,7 +626,14 @@ float computeCloudShadow(vec3 worldPos) {
     cloudUniforms.quality.value = qualityPreset.steps;
     const windX = CLOUD_WIND_DIRECTION.x * cloudSettings.windSpeed * windScale;
     const windZ = CLOUD_WIND_DIRECTION.z * cloudSettings.windSpeed * windScale;
-    cloudWindOffset.x += windX * delta;\r\n    cloudWindOffset.y += windZ * delta;\r\n    cloudUniforms.windOffset.value.set(cloudWindOffset.x, cloudWindOffset.y);\r\n    cloudShadowUniforms.offset.value.set(cloudWindOffset.x, cloudWindOffset.y);
+      cloudWindOffset.x += windX * delta;
+    cloudWindOffset.y += windZ * delta;
+    cloudShadowOffset.set(cloudWindOffset.x, cloudWindOffset.y);
+
+    cloudWindOffset.x += windX * delta;
+    cloudWindOffset.y += windZ * delta;
+    cloudUniforms.windOffset.value.set(cloudWindOffset.x, cloudWindOffset.y);
+    cloudShadowUniforms.offset.value.set(cloudWindOffset.x, cloudWindOffset.y);
 
     const targetBlend = cloudSettings.enabled ? 1 : 0;
     const blendFactor = 1 - Math.exp(-5 * delta);
