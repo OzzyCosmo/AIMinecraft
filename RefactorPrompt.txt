@@ -1,0 +1,2 @@
+Read codex_bootstrap.txt
+Now make V0.1.6. In this version, you must separate index.html into multiple scripts. Whatever is easier for you to manage, and continue adding upgrades in the future. Then add your additions to codex_bootstrap.txt. Your goal here is to make it easier for you to add future updates. Ensure that you don't accidently remove any features. Keep all game functionality the exact same.

@@ -1,0 +1,20 @@
+Main Tasks:
+- Make shadows more accurate (done in v0.1.1)
+- Add more pause-menu settings (mouse sensitivity, audio toggles)
+- Flying (basic N-toggle flight added in v0.1.4; expand with hover UI/energy?)
+- Mobs?
+- Research and create better lighting (AO + directional sky shading added in v0.1.4; next explore dynamic/global solutions)
+- Tools
+- Add block breaking audio/particle feedback
+- Volumetric Clouds Darker at Bottom (done in v0.1.8; volumetric layer now shades terrain)
+
+Creative Ideas (made by ai):
+- Seasonal biomes with temperature-based foliage changes
+- Underground cave networks with glowing crystals
+- Craftable gliders for long-distance travel
+- Dynamic weather storms that affect gameplay
+- NPC villages with simple trading and quests
+
+
+
+

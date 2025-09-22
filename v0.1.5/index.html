@@ -1,0 +1,2627 @@
+<!DOCTYPE html>
+<!-- Version: v0.1.5 -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Three.js Voxel Sandbox</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#000; color:#fff; font-family:'Segoe UI', Tahoma, sans-serif; }
+    canvas { display:block; }
+    .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.82); color:#fff; text-align:center; padding:2rem; gap:1rem; z-index:10; }
+    .overlay h1 { font-size:2.5rem; margin:0; }
+    .overlay p { max-width:460px; line-height:1.5; margin:0; opacity:0.85; }
+    .overlay button { margin-top:1rem; padding:0.9rem 2.4rem; font-size:1.1rem; border:none; border-radius:0.75rem; background:#4aa84a; color:#fff; cursor:pointer; box-shadow:0 0 18px rgba(0,0,0,0.45); transition:background 0.15s ease; }
+    .overlay button:hover { background:#5cc55c; }
+    #crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:10px; height:10px; border:2px solid rgba(255,255,255,0.85); border-radius:50%; pointer-events:none; z-index:4; box-shadow:0 0 6px rgba(0,0,0,0.85); }
+    .hud { position:fixed; inset:0; pointer-events:none; z-index:5; color:#fff; text-shadow:0 0 4px rgba(0,0,0,0.8); transition:opacity 0.2s ease; }
+    .hud.hidden { opacity:0.25; }
+    #message { pointer-events:none; text-align:center; margin-top:16px; font-size:14px; }
+    #fps { position:fixed; top:10px; left:10px; font-size:12px; background:rgba(0,0,0,0.45); padding:6px 10px; border-radius:6px; pointer-events:none; }
+    #renderToggle { position:fixed; bottom:110px; left:12px; pointer-events:auto; font-size:12px; padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.25); background:rgba(0,0,0,0.45); color:#fff; cursor:pointer; transition:background 0.15s ease; }
+    #renderToggle:hover { background:rgba(0,0,0,0.65); }
+    .settings-button { position:absolute; top:18px; right:18px; width:42px; height:42px; margin:0; padding:0; border-radius:21px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.45); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:none; transition:background 0.15s ease, border-color 0.15s ease; }
+    .settings-button:hover { background:rgba(0,0,0,0.65); border-color:rgba(255,255,255,0.35); }
+    .settings-button svg { width:22px; height:22px; display:block; stroke: currentColor; fill: none; }
+    #settingsPanel { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:12; padding:24px; }
+    #settingsPanel.open { display:flex; }
+    .settings-card { background:rgba(12,12,12,0.9); border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:24px; width:min(360px, 90vw); display:flex; flex-direction:column; gap:18px; box-shadow:0 22px 48px rgba(0,0,0,0.55); }
+    .settings-header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .settings-header h2 { margin:0; font-size:1.4rem; }
+    .settings-close { background:none; border:none; color:rgba(255,255,255,0.7); font-size:0.9rem; cursor:pointer; padding:4px 0; }
+    .settings-close:hover { color:#fff; text-decoration:underline; }
+    .settings-card label { font-size:0.9rem; margin-bottom:4px; display:block; color:rgba(255,255,255,0.85); }
+    .settings-input-row { display:flex; gap:10px; align-items:center; }
+    .settings-input-row input { flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.45); color:#fff; font-size:0.95rem; }
+    .settings-input-row input:focus { outline:none; border-color:rgba(90,160,255,0.9); box-shadow:0 0 0 2px rgba(90,160,255,0.3); }
+    .settings-input-row button { padding:8px 16px; border-radius:8px; border:none; background:#4aa84a; color:#fff; font-size:0.95rem; cursor:pointer; transition:background 0.15s ease; }
+    .settings-input-row button:hover { background:#5cc55c; }
+    .settings-select { width:100%; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.45); color:#fff; font-size:0.95rem; cursor:pointer; }
+    .settings-select:focus { outline:none; border-color:rgba(90,160,255,0.9); box-shadow:0 0 0 2px rgba(90,160,255,0.3); }
+    .settings-hint { margin:0; font-size:0.8rem; color:rgba(255,255,255,0.6); }
+    .settings-option { display:flex; flex-direction:column; gap:8px; }
+    .settings-checkbox { display:flex; align-items:center; gap:10px; font-size:0.95rem; cursor:pointer; color:rgba(255,255,255,0.85); }
+    .settings-checkbox input { width:18px; height:18px; accent-color:#4aa84a; cursor:pointer; }
+    .settings-slider-row { display:flex; align-items:center; gap:10px; }
+    .settings-slider-row input[type=range] { flex:1; accent-color:#4aa84a; }
+    .settings-value { min-width:3.4em; text-align:right; font-size:0.85rem; color:rgba(255,255,255,0.7); }
+    .settings-value.disabled { color:rgba(255,255,255,0.35); }
+    #hotbar { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); display:flex; gap:6px; padding:10px 14px; background:rgba(0,0,0,0.45); border-radius:14px; pointer-events:auto; }
+    .hotbar-slot { width:54px; height:54px; border:2px solid rgba(255,255,255,0.25); border-radius:10px; display:flex; align-items:center; justify-content:center; position:relative; color:#fff; font-size:11px; text-align:center; line-height:1.2; box-shadow:0 0 0 rgba(0,0,0,0); transition:border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease; cursor:pointer; }
+    .hotbar-slot .label { padding:4px; text-shadow:0 0 4px rgba(0,0,0,0.7); }
+    .hotbar-slot .index { position:absolute; top:4px; left:6px; font-size:10px; opacity:0.85; }
+    .hotbar-slot.selected { border-color:#fff; box-shadow:0 0 12px rgba(255,255,255,0.7); transform:translateY(-2px); }
+    .hotbar-slot:hover { border-color:rgba(255,255,255,0.6); }
+    button, .hotbar-slot { font-family:inherit; }
+    @media (max-width: 700px) { .overlay h1 { font-size:2rem; } .overlay p { font-size:0.95rem; } #hotbar { transform:translate(-50%, 0) scale(0.85); } }
+  </style>
+</head>
+<body>
+  <div id="overlay" class="overlay">
+    <button id="settingsButton" class="settings-button" type="button" aria-label="Open settings">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      </svg>
+    </button>
+    <h1>Voxel Sandbox</h1>
+    <p>Click Start to capture the mouse and load the world. Use WASD to move, the mouse to look, and Space to jump. Hold left click to break blocks, right click places the selected block. Press Esc to release the pointer and use the cog to adjust settings.</p>
+    <button id="startButton">Start</button>
+  </div>
+  <div id="settingsPanel">
+    <div class="settings-card">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button id="settingsClose" class="settings-close" type="button">Close</button>
+      </div>
+      <div>
+        <label for="renderDistanceInput">Render distance</label>
+        <div class="settings-input-row">
+          <input id="renderDistanceInput" type="number" min="1" step="1" inputmode="numeric">
+          <button id="renderDistanceApply" type="button">Apply</button>
+        </div>
+        <p class="settings-hint">Higher values load more chunks and can impact performance.</p>
+      </div>
+      <div class="settings-option">
+        <label class="settings-checkbox">
+          <input id="aoToggle" type="checkbox" checked>
+          Ambient Occlusion
+        </label>
+      </div>
+      <div class="settings-option">
+        <label for="aoStrengthInput">AO Strength</label>
+        <div class="settings-slider-row">
+          <input id="aoStrengthInput" type="range" min="0" max="1.5" step="0.05" value="1.5">
+          <span id="aoStrengthValue" class="settings-value">1.50</span>
+        </div>
+      </div>
+      <div class="settings-option">
+        <label class="settings-checkbox">
+          <input id="cloudToggle" type="checkbox" checked>
+          Volumetric Clouds
+        </label>
+      </div>
+      <div class="settings-option">
+        <label for="cloudQuality">Cloud Quality</label>
+        <select id="cloudQuality" class="settings-select">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="settings-option">
+        <label for="cloudCoverage">Cloud Coverage</label>
+        <div class="settings-slider-row">
+          <input id="cloudCoverage" type="range" min="0" max="1" step="0.01" value="0.45">
+          <span id="cloudCoverageValue" class="settings-value">0.45</span>
+        </div>
+      </div>
+      <div class="settings-option">
+        <label for="cloudDensity">Cloud Density</label>
+        <div class="settings-slider-row">
+          <input id="cloudDensity" type="range" min="0" max="1.5" step="0.01" value="0.60">
+          <span id="cloudDensityValue" class="settings-value">0.60</span>
+        </div>
+      </div>
+      <div class="settings-option">
+        <label for="cloudWind">Wind Speed</label>
+        <div class="settings-slider-row">
+          <input id="cloudWind" type="range" min="0" max="12" step="0.1" value="4.0">
+          <span id="cloudWindValue" class="settings-value">4.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="hud" class="hud">
+    <div id="message">WASD move - Space jump/ascend - Ctrl descend (flight) - Hold left click to break - Right click to place - 1-9 select - N toggles flight - E toggles HUD</div>
+    <div id="fps">FPS: --</div>
+    <button id="renderToggle">Render Distance: 3</button>
+    <div id="hotbar"></div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+  <script>
+  /*
+    Voxel sandbox quick tuning:
+    - Change CONFIG.RENDER_DISTANCE_DEFAULT / CONFIG.RENDER_DISTANCE_REDUCED to scale how many 16x16x16 chunks load. Lower values improve FPS.
+    - For larger worlds increase CONFIG.CHUNK_HEIGHT (multiple of 16) or CONFIG.WORLD_SEED for new terrain. Higher CHUNK_HEIGHT costs memory and mesh time.
+    - To ease CPU load adjust CONFIG.FIXED_TIME_STEP (lower physics rate) or CONFIG.ACTION_COOLDOWN_MS (slower block edits).
+      BREAK_STAGE_COUNT: 6,
+
+      DEFAULT_BREAK_TIME_MS: 350,
+
+  */
+  (() => {
+    'use strict';
+
+    // --- Core configuration ---------------------------------------------------------------------
+    const CONFIG = {
+      CHUNK_SIZE: 16,
+      CHUNK_HEIGHT: 64,
+      FIXED_TIME_STEP: 1 / 60,
+      RENDER_DISTANCE_DEFAULT: 3,
+      RENDER_DISTANCE_REDUCED: 2,
+      REMOVAL_BUFFER: 1,
+      RAYCAST_DISTANCE: 6,
+      WATER_LEVEL: 18,
+      WORLD_SEED: 1337,
+      GRAVITY: 28,
+      TERMINAL_VELOCITY: 48,
+      MOVE_SPEED: 4.3,
+      RUN_MULTIPLIER: 1.6,
+      FLY_SPEED: 8,
+      JUMP_VELOCITY: 8.5,
+      ACTION_COOLDOWN_MS: 180,
+      // Shadow tuning values keep contact shadows tight; tweak cautiously to avoid acne.
+      SHADOW_MAP_SIZE: 3328,
+      SHADOW_BIAS: -0.00018,
+      SHADOW_NORMAL_BIAS: 0,
+      SHADOW_RADIUS: 0.08,
+      SHADOW_CAMERA_EXTENT: 100,
+      SHADOW_CAMERA_NEAR: 4,
+      SHADOW_CAMERA_FAR: 210
+    };
+    const BLOCK_SIZE = 1;
+    const CHUNK_AREA = CONFIG.CHUNK_SIZE * CONFIG.CHUNK_SIZE;
+    const CHUNK_VOLUME = CHUNK_AREA * CONFIG.CHUNK_SIZE;
+
+    const AO_LUT = [1.0, 0.62, 0.34, 0.08];
+    const AO_STRENGTH_MAX = 1.5;
+    const AO_DEFAULT_STRENGTH = AO_STRENGTH_MAX;
+    const AO_DIRECTIONAL_STRENGTH = 0.85;
+    const AO_SKY_STRENGTH = 0.65;
+    const AO_SKY_STEPS = 5;
+    const CLOUD_LAYER_BOUNDS = { min: 52, max: 78 };
+    const CLOUD_QUALITY_PRESETS = {
+      low: { steps: 24 },
+      medium: { steps: 48 },
+      high: { steps: 80 }
+    };
+    const CLOUD_DEFAULTS = {
+      enabled: true,
+      coverage: 0.45,
+      density: 0.6,
+      windSpeed: 4.0,
+      quality: 'medium'
+    };
+    const CLOUD_WIND_DIRECTION = (() => {
+      const x = 0.62;
+      const z = 0.34;
+      const length = Math.hypot(x, z);
+      return { x: x / length, z: z / length };
+    })();
+    const CLOUD_WIND_SPEED_SCALE = 0.05;
+    const SUN_LIGHT_DIRECTION = (() => {
+      const length = Math.hypot(80, 120, 60);
+      return { x: 80 / length, y: 120 / length, z: 60 / length };
+    })();
+    const settings = {
+      aoEnabled: true,
+      aoStrength: AO_DEFAULT_STRENGTH,
+      aoDirectionalStrength: AO_DIRECTIONAL_STRENGTH,
+      aoSkyStrength: AO_SKY_STRENGTH,
+      clouds: Object.assign({}, CLOUD_DEFAULTS)
+    };
+
+    const CLOUD_VERTEX_SHADER = `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `;
+
+    const CLOUD_FRAGMENT_SHADER = `
+      precision highp float;
+
+      varying vec2 vUv;
+
+      uniform vec2 iResolution;
+      uniform float iTime;
+      uniform vec3 camPos;
+      uniform mat4 camMatrix;
+      uniform mat4 projMatrixInv;
+      uniform vec3 sunDir;
+      uniform float coverage;
+      uniform float density;
+      uniform vec2 wind;
+      uniform float quality;
+      uniform float enableClouds;
+      uniform vec2 layerHeights;
+
+      const int MAX_STEPS = 96;
+      const float BASE_NOISE_SCALE = 0.015;
+      const float DETAIL_NOISE_SCALE = 0.055;
+
+      float hash(vec3 p) {
+        return fract(sin(dot(p, vec3(12.9898, 78.233, 39.425))) * 43758.5453);
+      }
+
+      float noise(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+        vec3 u = f * f * (3.0 - 2.0 * f);
+
+        float n000 = hash(i + vec3(0.0, 0.0, 0.0));
+        float n100 = hash(i + vec3(1.0, 0.0, 0.0));
+        float n010 = hash(i + vec3(0.0, 1.0, 0.0));
+        float n110 = hash(i + vec3(1.0, 1.0, 0.0));
+        float n001 = hash(i + vec3(0.0, 0.0, 1.0));
+        float n101 = hash(i + vec3(1.0, 0.0, 1.0));
+        float n011 = hash(i + vec3(0.0, 1.0, 1.0));
+        float n111 = hash(i + vec3(1.0, 1.0, 1.0));
+
+        float nx00 = mix(n000, n100, u.x);
+        float nx10 = mix(n010, n110, u.x);
+        float nx01 = mix(n001, n101, u.x);
+        float nx11 = mix(n011, n111, u.x);
+        float nxy0 = mix(nx00, nx10, u.y);
+        float nxy1 = mix(nx01, nx11, u.y);
+        return mix(nxy0, nxy1, u.z);
+      }
+
+      float fbm(vec3 p) {
+        float value = 0.0;
+        float amplitude = 0.5;
+        float frequency = 1.0;
+        for (int i = 0; i < 5; i++) {
+          value += noise(p * frequency) * amplitude;
+          frequency *= 2.0;
+          amplitude *= 0.5;
+        }
+        return value;
+      }
+
+      vec3 skyGradient(vec3 dir) {
+        float t = clamp(dir.y * 0.65 + 0.35, 0.0, 1.0);
+        vec3 horizon = vec3(0.58, 0.72, 0.88);
+        vec3 zenith = vec3(0.18, 0.34, 0.58);
+        return mix(horizon, zenith, t);
+      }
+
+      float calcShadow(vec3 pos, vec3 lightDir, float coverageThreshold, float baseDensity, vec2 bounds, vec2 windOffset) {
+        float shadow = 1.0;
+        float stepLen = 3.0;
+        vec3 samplePos = pos + lightDir * stepLen;
+        for (int i = 0; i < 5; i++) {
+          if (samplePos.y < bounds.x || samplePos.y > bounds.y) {
+            break;
+          }
+          vec3 windSample = vec3(samplePos.x + windOffset.x, samplePos.y, samplePos.z + windOffset.y);
+          float shape = fbm(windSample * BASE_NOISE_SCALE);
+          float detail = fbm(windSample * DETAIL_NOISE_SCALE);
+          float densitySample = smoothstep(coverageThreshold, 1.0, shape + detail * 0.45) * baseDensity;
+          shadow -= densitySample * 0.15;
+          samplePos += lightDir * stepLen;
+        }
+        return clamp(shadow, 0.25, 1.0);
+      }
+
+      void main() {
+        vec2 ndc = vUv * 2.0 - 1.0;
+        vec4 clip = vec4(ndc, 1.0, 1.0);
+        vec4 viewDir = projMatrixInv * clip;
+        vec3 rd = normalize((camMatrix * vec4(viewDir.xyz, 0.0)).xyz);
+        vec3 ro = camPos;
+
+        vec3 skyColor = skyGradient(rd);
+
+        if (enableClouds <= 0.001) {
+          gl_FragColor = vec4(skyColor, 1.0);
+          return;
+        }
+
+        float slabMin = layerHeights.x;
+        float slabMax = layerHeights.y;
+
+        float t0 = (slabMin - ro.y) / rd.y;
+        float t1 = (slabMax - ro.y) / rd.y;
+        float tNear = min(t0, t1);
+        float tFar = max(t0, t1);
+
+        if (tFar < 0.0) {
+          gl_FragColor = vec4(skyColor, 1.0);
+          return;
+        }
+        float start = max(tNear, 0.0);
+        float end = max(start, tFar);
+        float viewLimit = 400.0;
+        end = min(end, viewLimit);
+        if (end - start <= 0.0001) {
+          gl_FragColor = vec4(skyColor, 1.0);
+          return;
+        }
+
+        float steps = clamp(quality, 8.0, float(MAX_STEPS));
+        float stepLength = (end - start) / steps;
+        vec2 windOffset = wind * iTime;
+
+        float coverageThreshold = mix(0.85, 0.2, clamp(coverage, 0.0, 1.0));
+        float densityStrength = max(0.0, density);
+
+        vec3 accumulatedColor = vec3(0.0);
+        float accumulatedAlpha = 0.0;
+
+        float t = start;
+        for (int i = 0; i < MAX_STEPS; i++) {
+          if (float(i) >= steps) {
+            break;
+          }
+          vec3 samplePos = ro + rd * (t + stepLength * 0.5);
+          t += stepLength;
+
+          vec3 windSamplePos = vec3(samplePos.x + windOffset.x, samplePos.y, samplePos.z + windOffset.y);
+
+          float baseShape = fbm(windSamplePos * BASE_NOISE_SCALE);
+          float detailShape = fbm(windSamplePos * DETAIL_NOISE_SCALE);
+          float cloudShape = baseShape + detailShape * 0.45;
+
+          float baseDensity = smoothstep(coverageThreshold, 1.0, cloudShape);
+          float verticalBlend = smoothstep(slabMin, slabMin + 6.0, samplePos.y) *
+                                (1.0 - smoothstep(slabMax - 6.0, slabMax, samplePos.y));
+          float localDensity = baseDensity * densityStrength * verticalBlend;
+
+          if (localDensity <= 0.0005) {
+            continue;
+          }
+
+          float lightBase = clamp(dot(normalize(vec3(0.0, 1.0, 0.0)), sunDir) * 0.4 + 0.6, 0.35, 1.0);
+          float shadow = calcShadow(samplePos, sunDir, coverageThreshold, densityStrength, vec2(slabMin, slabMax), windOffset);
+          float lighting = clamp(lightBase * shadow, 0.2, 1.0);
+
+          float absorption = 1.0 - exp(-localDensity * stepLength * 1.2);
+          absorption = clamp(absorption, 0.0, 1.0);
+
+          vec3 sampleColor = mix(vec3(0.62, 0.67, 0.75), vec3(1.0, 0.97, 0.92), lighting);
+          float transmittance = 1.0 - accumulatedAlpha;
+          accumulatedColor += sampleColor * absorption * transmittance;
+          accumulatedAlpha += absorption * transmittance;
+
+          if (accumulatedAlpha >= 0.995) {
+            break;
+          }
+        }
+
+        accumulatedAlpha *= enableClouds;
+        vec3 finalColor = mix(skyColor, accumulatedColor, accumulatedAlpha);
+        gl_FragColor = vec4(finalColor, 1.0);
+      }
+    `;
+
+    // --- Block definitions ----------------------------------------------------------------------
+    const BLOCK = {
+      AIR: 0,
+      GRASS: 1,
+      DIRT: 2,
+      STONE: 3,
+      WOOD: 4,
+      LEAVES: 5,
+      SAND: 6
+    };
+
+    const TILE = {
+      GRASS_TOP: 'GRASS_TOP',
+      GRASS_SIDE: 'GRASS_SIDE',
+      DIRT: 'DIRT',
+      STONE: 'STONE',
+      WOOD_SIDE: 'WOOD_SIDE',
+      WOOD_TOP: 'WOOD_TOP',
+      LEAVES: 'LEAVES',
+      SAND: 'SAND'
+    };
+
+    const BLOCK_DEFS = [];
+    BLOCK_DEFS[BLOCK.AIR] = {
+      id: BLOCK.AIR,
+      name: 'Air',
+      solid: false,
+      transparent: true,
+      breakTime: 0,
+      breakable: false,
+      faces: [null, null, null, null, null, null]
+    };
+    BLOCK_DEFS[BLOCK.GRASS] = {
+      id: BLOCK.GRASS,
+      name: 'Grass',
+      solid: true,
+      transparent: false,
+      breakTime: 280,
+      faces: [
+        TILE.GRASS_SIDE,
+        TILE.GRASS_SIDE,
+        TILE.GRASS_TOP,
+        TILE.DIRT,
+        TILE.GRASS_SIDE,
+        TILE.GRASS_SIDE
+      ]
+    };
+    BLOCK_DEFS[BLOCK.DIRT] = {
+      id: BLOCK.DIRT,
+      name: 'Dirt',
+      solid: true,
+      transparent: false,
+      breakTime: 360,
+      faces: [
+        TILE.DIRT,
+        TILE.DIRT,
+        TILE.DIRT,
+        TILE.DIRT,
+        TILE.DIRT,
+        TILE.DIRT
+      ]
+    };
+    BLOCK_DEFS[BLOCK.STONE] = {
+      id: BLOCK.STONE,
+      name: 'Stone',
+      solid: true,
+      transparent: false,
+      breakTime: 1500,
+      faces: [
+        TILE.STONE,
+        TILE.STONE,
+        TILE.STONE,
+        TILE.STONE,
+        TILE.STONE,
+        TILE.STONE
+      ]
+    };
+    BLOCK_DEFS[BLOCK.WOOD] = {
+      id: BLOCK.WOOD,
+      name: 'Wood',
+      solid: true,
+      transparent: false,
+      breakTime: 1000,
+      faces: [
+        TILE.WOOD_SIDE,
+        TILE.WOOD_SIDE,
+        TILE.WOOD_TOP,
+        TILE.WOOD_TOP,
+        TILE.WOOD_SIDE,
+        TILE.WOOD_SIDE
+      ]
+    };
+    BLOCK_DEFS[BLOCK.LEAVES] = {
+      id: BLOCK.LEAVES,
+      name: 'Leaves',
+      solid: true,
+      transparent: true,
+      breakTime: 220,
+      faces: [
+        TILE.LEAVES,
+        TILE.LEAVES,
+        TILE.LEAVES,
+        TILE.LEAVES,
+        TILE.LEAVES,
+        TILE.LEAVES
+      ]
+    };
+    BLOCK_DEFS[BLOCK.SAND] = {
+      id: BLOCK.SAND,
+      name: 'Sand',
+      solid: true,
+      transparent: false,
+      breakTime: 420,
+      faces: [
+        TILE.SAND,
+        TILE.SAND,
+        TILE.SAND,
+        TILE.SAND,
+        TILE.SAND,
+        TILE.SAND
+      ]
+    };
+
+    const HOTBAR_ITEMS = [
+      BLOCK.GRASS,
+      BLOCK.DIRT,
+      BLOCK.STONE,
+      BLOCK.WOOD,
+      BLOCK.LEAVES,
+      BLOCK.SAND,
+      BLOCK.STONE,
+      BLOCK.WOOD,
+      BLOCK.GRASS
+    ];
+
+    const HOTBAR_COLORS = {};
+    HOTBAR_COLORS[BLOCK.GRASS] = '#5fa956';
+    HOTBAR_COLORS[BLOCK.DIRT] = '#7c4a1e';
+    HOTBAR_COLORS[BLOCK.STONE] = '#828282';
+    HOTBAR_COLORS[BLOCK.WOOD] = '#a6793f';
+    HOTBAR_COLORS[BLOCK.LEAVES] = '#4ca55a';
+    HOTBAR_COLORS[BLOCK.SAND] = '#d9c98c';
+
+    const FACE_DATA = [
+      {
+        dir: [ 1, 0, 0 ],
+        corners: [ [1,1,0], [1,1,1], [1,0,1], [1,0,0] ],
+        normal: [ 1, 0, 0 ],
+        ao: { u: [ 0, 1, 0 ], v: [ 0, 0, 1 ], uAxis: 1, vAxis: 2 }
+      },
+      {
+        dir: [ -1, 0, 0 ],
+        corners: [ [0,1,1], [0,1,0], [0,0,0], [0,0,1] ],
+        normal: [ -1, 0, 0 ],
+        ao: { u: [ 0, 1, 0 ], v: [ 0, 0, 1 ], uAxis: 1, vAxis: 2 }
+      },
+      {
+        dir: [ 0, 1, 0 ],
+        corners: [ [0,1,1], [1,1,1], [1,1,0], [0,1,0] ],
+        normal: [ 0, 1, 0 ],
+        ao: { u: [ 1, 0, 0 ], v: [ 0, 0, 1 ], uAxis: 0, vAxis: 2 }
+      },
+      {
+        dir: [ 0, -1, 0 ],
+        corners: [ [0,0,0], [1,0,0], [1,0,1], [0,0,1] ],
+        normal: [ 0, -1, 0 ],
+        ao: { u: [ 1, 0, 0 ], v: [ 0, 0, 1 ], uAxis: 0, vAxis: 2 }
+      },
+      {
+        dir: [ 0, 0, 1 ],
+        corners: [ [1,1,1], [0,1,1], [0,0,1], [1,0,1] ],
+        normal: [ 0, 0, 1 ],
+        ao: { u: [ 1, 0, 0 ], v: [ 0, 1, 0 ], uAxis: 0, vAxis: 1 }
+      },
+      {
+        dir: [ 0, 0, -1 ],
+        corners: [ [0,1,0], [1,1,0], [1,0,0], [0,0,0] ],
+        normal: [ 0, 0, -1 ],
+        ao: { u: [ 1, 0, 0 ], v: [ 0, 1, 0 ], uAxis: 0, vAxis: 1 }
+      }
+    ];
+    const FACE_INDICES = [0, 1, 2, 0, 2, 3];
+
+    // --- Shared scratch objects to avoid garbage ------------------------------------------------
+    const TMP_QUATERNION = new THREE.Quaternion();
+    const TMP_EULER = new THREE.Euler();
+    const TMP_NORMAL_MATRIX = new THREE.Matrix3();
+    const TMP_VEC3 = new THREE.Vector3();
+    const TMP_LIGHT_VEC = new THREE.Vector3();
+    const SUN_LIGHT_OFFSET = new THREE.Vector3(80, 120, 60);
+
+    // --- Utility helpers -----------------------------------------------------------------------
+    function createSeededRandom(seed) {
+      let s = seed % 2147483647;
+      if (s <= 0) s += 2147483646;
+      return function() {
+        s = (s * 16807) % 2147483647;
+        return (s - 1) / 2147483646;
+      };
+    }
+
+    const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    const lerp = (a, b, t) => a + t * (b - a);
+    function grad(hash, x, y) {
+      switch (hash & 3) {
+        case 0: return x + y;
+        case 1: return -x + y;
+        case 2: return x - y;
+        default: return -x - y;
+      }
+    }
+
+    function mod(n, m) {
+      const r = n % m;
+      return r < 0 ? r + m : r;
+    }
+
+    // --- Noise + terrain generation ------------------------------------------------------------
+    class PerlinNoise {
+      constructor(seed) {
+        this.permutation = new Uint8Array(512);
+        const p = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) p[i] = i;
+        const rand = createSeededRandom(seed);
+        for (let i = 255; i > 0; i--) {
+          const j = Math.floor(rand() * (i + 1));
+          [p[i], p[j]] = [p[j], p[i]];
+        }
+        for (let i = 0; i < 512; i++) {
+          this.permutation[i] = p[i & 255];
+        }
+      }
+
+      noise2D(x, y) {
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const xf = x - Math.floor(x);
+        const yf = y - Math.floor(y);
+
+        const tl = this.permutation[this.permutation[X] + Y + 1];
+        const tr = this.permutation[this.permutation[X + 1] + Y + 1];
+        const bl = this.permutation[this.permutation[X] + Y];
+        const br = this.permutation[this.permutation[X + 1] + Y];
+
+        const u = fade(xf);
+        const v = fade(yf);
+
+        const x1 = lerp(grad(bl, xf, yf), grad(br, xf - 1, yf), u);
+        const x2 = lerp(grad(tl, xf, yf - 1), grad(tr, xf - 1, yf - 1), u);
+
+        return lerp(x1, x2, v);
+      }
+    }
+
+    class TerrainGenerator {
+      constructor(seed) {
+        this.heightNoise = new PerlinNoise(seed);
+        this.hillNoise = new PerlinNoise(seed + 1);
+        this.detailNoise = new PerlinNoise(seed + 2);
+        this.treeNoise = new PerlinNoise(seed + 3);
+        this.heightCache = new Map();
+        this.treeCache = new Map();
+      }
+
+      key(x, z) {
+        return `${x},${z}`;
+      }
+
+      getHeightAt(x, z) {
+        // Blend multiple noise octaves to get rolling hills with small detail.
+        const key = this.key(x, z);
+        if (this.heightCache.has(key)) {
+          return this.heightCache.get(key);
+        }
+        const base = this.heightNoise.noise2D(x * 0.01, z * 0.01) * 12;
+        const hills = this.hillNoise.noise2D(x * 0.004, z * 0.004) * 18 * 0.6;
+        const detail = this.detailNoise.noise2D(x * 0.03, z * 0.03) * 5 * 0.5;
+        let height = Math.round(CONFIG.WATER_LEVEL + base + hills + detail - 4);
+        height = Math.max(4, Math.min(CONFIG.CHUNK_HEIGHT - 2, height));
+        this.heightCache.set(key, height);
+        return height;
+      }
+
+      getTreeHeightAt(x, z) {
+        // Sample low-frequency noise to decide where trees spawn and prefer local peaks.
+        const key = this.key(x, z);
+        if (this.treeCache.has(key)) {
+          return this.treeCache.get(key);
+        }
+        const noiseValue = (this.treeNoise.noise2D(x * 0.05, z * 0.05) + 1) * 0.5;
+        let height = 0;
+        if (noiseValue > 0.74) {
+          let isPeak = true;
+          for (let dx = -1; dx <= 1 && isPeak; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              if (dx === 0 && dz === 0) continue;
+              const neighbor = (this.treeNoise.noise2D((x + dx) * 0.05, (z + dz) * 0.05) + 1) * 0.5;
+              if (neighbor > noiseValue) {
+                isPeak = false;
+                break;
+              }
+            }
+          }
+          if (isPeak && this.getHeightAt(x, z) > CONFIG.WATER_LEVEL + 1) {
+            height = 4 + Math.round(noiseValue * 2);
+          }
+        }
+        this.treeCache.set(key, height);
+        return height;
+      }
+    }
+
+    // --- Chunk container -----------------------------------------------------------------------
+    class Chunk {
+      constructor(cx, cy, cz) {
+        this.cx = cx;
+        this.cy = cy;
+        this.cz = cz;
+        this.data = new Uint8Array(CHUNK_VOLUME);
+        this.mesh = null;
+      }
+
+      index(x, y, z) {
+        return y * CHUNK_AREA + z * CONFIG.CHUNK_SIZE + x;
+      }
+
+      get(x, y, z) {
+        return this.data[this.index(x, y, z)];
+      }
+
+      set(x, y, z, value) {
+        this.data[this.index(x, y, z)] = value;
+      }
+
+      generate(generator) {
+        const size = CONFIG.CHUNK_SIZE;
+        const baseX = this.cx * size;
+        const baseY = this.cy * size;
+        const baseZ = this.cz * size;
+        // Fill the chunk by sampling height and tree data for every column.
+
+        for (let lx = 0; lx < size; lx++) {
+          const worldX = baseX + lx;
+          for (let lz = 0; lz < size; lz++) {
+            const worldZ = baseZ + lz;
+            const surfaceHeight = generator.getHeightAt(worldX, worldZ);
+            const treeHeight = generator.getTreeHeightAt(worldX, worldZ);
+
+            for (let ly = 0; ly < size; ly++) {
+              const worldY = baseY + ly;
+              let blockId = BLOCK.AIR;
+
+              // Start with the solid ground under the surface.
+              if (worldY <= surfaceHeight) {
+                if (worldY === surfaceHeight) {
+                  blockId = surfaceHeight <= CONFIG.WATER_LEVEL + 1 ? BLOCK.SAND : BLOCK.GRASS;
+                } else if (surfaceHeight <= CONFIG.WATER_LEVEL) {
+                  blockId = BLOCK.SAND;
+                } else if (surfaceHeight - worldY <= 3) {
+                  blockId = BLOCK.DIRT;
+                } else {
+                  blockId = BLOCK.STONE;
+                }
+              } else {
+                // Vertical trunk for the tree's anchor column.
+                if (treeHeight > 0 && worldY > surfaceHeight && worldY <= surfaceHeight + treeHeight) {
+                  blockId = BLOCK.WOOD;
+                }
+
+                // Scan nearby tree anchors so leaves spill across chunk boundaries.
+                if (blockId === BLOCK.AIR && worldY > surfaceHeight && worldY <= surfaceHeight + 8) {
+                  let foundTreeBlock = false;
+                  for (let dx = -2; dx <= 2 && !foundTreeBlock; dx++) {
+                    for (let dz = -2; dz <= 2 && !foundTreeBlock; dz++) {
+                      const anchorX = worldX + dx;
+                      const anchorZ = worldZ + dz;
+                      const anchorTreeHeight = generator.getTreeHeightAt(anchorX, anchorZ);
+                      if (anchorTreeHeight <= 0) continue;
+                      const anchorSurface = generator.getHeightAt(anchorX, anchorZ);
+                      const relY = worldY - anchorSurface;
+                      if (relY < 1 || relY > anchorTreeHeight + 1) continue;
+
+                      const offsetX = worldX - anchorX;
+                      const offsetZ = worldZ - anchorZ;
+
+                      if (offsetX === 0 && offsetZ === 0 && relY <= anchorTreeHeight) {
+                        blockId = BLOCK.WOOD;
+                        foundTreeBlock = true;
+                      } else if (relY >= anchorTreeHeight - 2 && relY <= anchorTreeHeight + 1) {
+                        const canopyLayer = relY - (anchorTreeHeight - 2);
+                        const radius = Math.max(1, 3 - canopyLayer);
+                        if (Math.abs(offsetX) <= radius && Math.abs(offsetZ) <= radius) {
+                          blockId = BLOCK.LEAVES;
+                          foundTreeBlock = true;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              this.set(lx, ly, lz, blockId);
+            }
+          }
+        }
+      }
+    }
+
+    // --- World & meshing -----------------------------------------------------------------------
+    class World {
+      constructor(scene, atlasInfo, settings) {
+        this.scene = scene;
+        this.settings = settings;
+        this.sunDirection = SUN_LIGHT_DIRECTION;
+        this.skyOcclusionSteps = AO_SKY_STEPS;
+        this.generator = new TerrainGenerator(CONFIG.WORLD_SEED);
+        this.chunks = new Map();
+        this.chunkMeshes = new Set();
+        this.chunkArray = [];
+        this.chunkArrayDirty = false;
+        this.renderDistance = CONFIG.RENDER_DISTANCE_DEFAULT;
+        this.preferredRenderDistance = this.renderDistance;
+        this.maxChunkY = Math.ceil(CONFIG.CHUNK_HEIGHT / CONFIG.CHUNK_SIZE);
+        this.lastChunkUpdateTime = 0;
+        this.forceRefresh = true;
+        this.aoScratch = new Float32Array(4);
+
+        this.textureAtlas = atlasInfo.texture;
+        this.textureAtlas.wrapS = THREE.ClampToEdgeWrapping;
+        this.textureAtlas.wrapT = THREE.ClampToEdgeWrapping;
+
+        this.blockFaceUVs = BLOCK_DEFS.map(def => def.faces.map(face => face ? atlasInfo.uvs[face] : null));
+
+        this.material = new THREE.MeshStandardMaterial({
+          map: this.textureAtlas,
+          vertexColors: true,
+          flatShading: true,
+          roughness: 1.0,
+          metalness: 0.0,
+          alphaTest: 0.45
+        });
+        this.material.side = THREE.FrontSide;
+        this.material.needsUpdate = true;
+      }
+
+      chunkKey(cx, cy, cz) {
+        return `${cx}|${cy}|${cz}`;
+      }
+
+      ensureChunk(cx, cy, cz) {
+        if (cy < 0 || cy >= this.maxChunkY) return null;
+        const key = this.chunkKey(cx, cy, cz);
+        let chunk = this.chunks.get(key);
+        if (chunk) {
+          return chunk;
+        }
+        chunk = new Chunk(cx, cy, cz);
+        chunk.generate(this.generator);
+        this.chunks.set(key, chunk); // Store before meshing so neighbor lookups see voxel data.
+        this.buildChunkMesh(chunk);
+        return chunk;
+      }
+
+      rebuildChunkAt(cx, cy, cz) {
+        const key = this.chunkKey(cx, cy, cz);
+        const chunk = this.chunks.get(key);
+        if (!chunk) return;
+        this.buildChunkMesh(chunk);
+      }
+
+      removeChunk(key) {
+        const chunk = this.chunks.get(key);
+        if (!chunk) return;
+        if (chunk.mesh) {
+          this.scene.remove(chunk.mesh);
+          this.chunkMeshes.delete(chunk.mesh);
+          chunk.mesh.geometry.dispose();
+          chunk.mesh = null;
+        }
+        this.chunks.delete(key);
+        this.chunkArrayDirty = true;
+      }
+
+      // Chunk meshing + baked ambient occlusion (AO):
+      // Each visible face samples the three neighboring blocks touching its corners.
+      // Additional directional + sky sampling darken faces opposite the sun or caught under canopies.
+      // AO_LUT defines the base shadowing, blended by settings.aoStrength into vertex colors with directional and sky occlusion boosts.
+      buildChunkMesh(chunk) {
+        if (chunk.mesh) {
+          this.scene.remove(chunk.mesh);
+          this.chunkMeshes.delete(chunk.mesh);
+          chunk.mesh.geometry.dispose();
+          chunk.mesh = null;
+        }
+
+        const positions = [];
+        const normals = [];
+        const uvs = [];
+        const colors = [];
+        const indices = [];
+        let vertexOffset = 0;
+
+        const size = CONFIG.CHUNK_SIZE;
+        const originX = chunk.cx * size;
+        const originY = chunk.cy * size;
+        const originZ = chunk.cz * size;
+        // Walk all voxels and emit quads only where a face is exposed.
+
+        for (let ly = 0; ly < size; ly++) {
+          for (let lz = 0; lz < size; lz++) {
+            for (let lx = 0; lx < size; lx++) {
+              const blockId = chunk.get(lx, ly, lz);
+              if (blockId === BLOCK.AIR) continue; // Skip empty space quickly.
+              const worldX = originX + lx;
+              const worldY = originY + ly;
+              const worldZ = originZ + lz;
+
+              for (let faceIndex = 0; faceIndex < FACE_DATA.length; faceIndex++) {
+                const face = FACE_DATA[faceIndex];
+                const neighborId = this.getBlock(worldX + face.dir[0], worldY + face.dir[1], worldZ + face.dir[2]);
+                const neighborDef = BLOCK_DEFS[neighborId] || BLOCK_DEFS[BLOCK.AIR];
+                const hideFace = neighborDef.solid && !neighborDef.transparent;
+                if (hideFace) continue; // Faces against opaque neighbors are never visible.
+
+                const tile = this.blockFaceUVs[blockId][faceIndex];
+                if (!tile) continue;
+
+                const aoValues = this.computeFaceAO(worldX, worldY, worldZ, face);
+
+                for (let i = 0; i < FACE_INDICES.length; i++) {
+                  indices.push(vertexOffset + FACE_INDICES[i]);
+                }
+
+                for (let i = 0; i < face.corners.length; i++) {
+                  const corner = face.corners[i];
+                  positions.push(
+                    (worldX + corner[0]) * BLOCK_SIZE,
+                    (worldY + corner[1]) * BLOCK_SIZE,
+                    (worldZ + corner[2]) * BLOCK_SIZE
+                  );
+                  normals.push(face.normal[0], face.normal[1], face.normal[2]);
+                  const ao = aoValues[i];
+                  colors.push(ao, ao, ao);
+                }
+
+                // UVs map into the stitched atlas with a touch of padding to avoid bleeding.
+                uvs.push(tile.u1, tile.v1);
+                uvs.push(tile.u0, tile.v1);
+                uvs.push(tile.u0, tile.v0);
+                uvs.push(tile.u1, tile.v0);
+
+                vertexOffset += 4;
+              }
+            }
+          }
+        }
+
+        if (positions.length === 0) {
+          chunk.mesh = null;
+          return;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.setIndex(indices);
+        geometry.computeBoundingSphere();
+
+        const mesh = new THREE.Mesh(geometry, this.material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.chunk = chunk;
+        mesh.frustumCulled = true;
+        this.scene.add(mesh);
+        this.chunkMeshes.add(mesh);
+        this.chunkArrayDirty = true;
+        chunk.mesh = mesh;
+      }
+      sampleOcclusion(x, y, z) {
+        const blockId = this.getBlock(x, y, z);
+        const def = BLOCK_DEFS[blockId];
+        return def ? def.solid : false;
+      }
+      sampleSkyOcclusion(x, y, z) {
+        const steps = this.skyOcclusionSteps;
+        if (steps <= 0) return 0;
+        let blocked = 0;
+        for (let i = 1; i <= steps; i++) {
+          if (this.sampleOcclusion(x, y + i, z)) {
+            blocked++;
+          } else {
+          }
+        }
+        return blocked / steps;
+      }
+
+      computeFaceAO(worldX, worldY, worldZ, face) {
+        const aoValues = this.aoScratch;
+        const { ao } = face;
+        const settings = this.settings;
+        const strength = settings.aoStrength;
+
+        if (!settings.aoEnabled || strength <= 0) {
+          aoValues[0] = 1;
+          aoValues[1] = 1;
+          aoValues[2] = 1;
+          aoValues[3] = 1;
+          return aoValues;
+        }
+
+        const baseX = worldX + face.dir[0];
+        const baseY = worldY + face.dir[1];
+        const baseZ = worldZ + face.dir[2];
+        const u = ao.u;
+        const v = ao.v;
+        const uAxis = ao.uAxis;
+        const vAxis = ao.vAxis;
+
+        const sunDir = this.sunDirection;
+        const faceDot = face.normal[0] * sunDir.x + face.normal[1] * sunDir.y + face.normal[2] * sunDir.z;
+        const directionalStrength = settings.aoDirectionalStrength * strength;
+        const away = Math.max(0, -faceDot);
+        const lightFacing = Math.max(0, faceDot);
+        const directionalShade = Math.max(0.1, (1 - away * directionalStrength) * (1 + lightFacing * directionalStrength * 0.2));
+
+        const skyOcclusion = this.sampleSkyOcclusion(worldX, worldY, worldZ);
+        const skyInfluence = settings.aoSkyStrength * strength;
+        const lateralFactor = 1 - Math.abs(face.normal[1]);
+        const downwardFactor = Math.max(0, -face.normal[1]);
+        const skyShade = Math.max(0.1, 1 - skyOcclusion * skyInfluence * (downwardFactor + lateralFactor * 0.4));
+
+        for (let i = 0; i < face.corners.length; i++) {
+          const corner = face.corners[i];
+          const signU = corner[uAxis] === 1 ? 1 : -1;
+          const signV = corner[vAxis] === 1 ? 1 : -1;
+
+          const offsetUX = u[0] * signU;
+          const offsetUY = u[1] * signU;
+          const offsetUZ = u[2] * signU;
+          const offsetVX = v[0] * signV;
+          const offsetVY = v[1] * signV;
+          const offsetVZ = v[2] * signV;
+
+          const side1 = this.sampleOcclusion(baseX + offsetUX, baseY + offsetUY, baseZ + offsetUZ) ? 1 : 0;
+          const side2 = this.sampleOcclusion(baseX + offsetVX, baseY + offsetVY, baseZ + offsetVZ) ? 1 : 0;
+          const cornerOcc = this.sampleOcclusion(
+            baseX + offsetUX + offsetVX,
+            baseY + offsetUY + offsetVY,
+            baseZ + offsetUZ + offsetVZ
+          ) ? 1 : 0;
+
+          const occlusion = (side1 && side2) ? 3 : (side1 + side2 + cornerOcc);
+          const base = AO_LUT[occlusion];
+          const occlusionShade = THREE.MathUtils.lerp(1, base, strength);
+          aoValues[i] = Math.max(0.05, occlusionShade * directionalShade * skyShade);
+        }
+
+        return aoValues;
+      }
+
+
+
+      getBlock(x, y, z) {
+        if (y < 0 || y >= CONFIG.CHUNK_HEIGHT) {
+          return BLOCK.AIR;
+        }
+        const size = CONFIG.CHUNK_SIZE;
+        const cx = Math.floor(x / size);
+        const cy = Math.floor(y / size);
+        const cz = Math.floor(z / size);
+        const key = this.chunkKey(cx, cy, cz);
+        const chunk = this.chunks.get(key);
+        if (!chunk) {
+          return BLOCK.AIR;
+        }
+        const lx = mod(x, size);
+        const ly = mod(y, size);
+        const lz = mod(z, size);
+        return chunk.get(lx, ly, lz);
+      }
+
+      setBlock(x, y, z, id) {
+        if (y < 0 || y >= CONFIG.CHUNK_HEIGHT) {
+          return false;
+        }
+        const size = CONFIG.CHUNK_SIZE;
+        const cx = Math.floor(x / size);
+        const cy = Math.floor(y / size);
+        const cz = Math.floor(z / size);
+        const chunk = this.ensureChunk(cx, cy, cz);
+        if (!chunk) return false;
+        const lx = mod(x, size);
+        const ly = mod(y, size);
+        const lz = mod(z, size);
+        const current = chunk.get(lx, ly, lz);
+        if (current === id) return false;
+
+        chunk.set(lx, ly, lz, id);
+        this.buildChunkMesh(chunk);
+
+        if (lx === 0) this.rebuildChunkAt(cx - 1, cy, cz);
+        if (lx === size - 1) this.rebuildChunkAt(cx + 1, cy, cz);
+        if (ly === 0) this.rebuildChunkAt(cx, cy - 1, cz);
+        if (ly === size - 1) this.rebuildChunkAt(cx, cy + 1, cz);
+        if (lz === 0) this.rebuildChunkAt(cx, cy, cz - 1);
+        if (lz === size - 1) this.rebuildChunkAt(cx, cy, cz + 1);
+
+        return true;
+      }
+
+      isSolid(blockId) {
+        const def = BLOCK_DEFS[blockId];
+        return def ? def.solid : false;
+      }
+
+      getRaycastObjects() {
+        if (this.chunkArrayDirty) {
+          this.chunkArray = Array.from(this.chunkMeshes);
+          this.chunkArrayDirty = false;
+        }
+        return this.chunkArray;
+      }
+
+      refreshChunks(playerPosition, force = false) {
+        const now = performance.now();
+        if (!force && now - this.lastChunkUpdateTime < 200) {
+          return;
+        }
+        this.lastChunkUpdateTime = now;
+
+        const size = CONFIG.CHUNK_SIZE;
+        const baseCx = Math.floor(playerPosition.x / size);
+        const baseCz = Math.floor(playerPosition.z / size);
+        const radius = this.renderDistance;
+        const required = new Set();
+        // Keep a ring of chunks around the player generated and retire distant ones.
+
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dz = -radius; dz <= radius; dz++) {
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            if (distance > radius + 0.5) continue;
+            const cx = baseCx + dx;
+            const cz = baseCz + dz;
+            for (let cy = 0; cy < this.maxChunkY; cy++) {
+              const key = this.chunkKey(cx, cy, cz);
+              required.add(key);
+              if (!this.chunks.has(key)) {
+                this.ensureChunk(cx, cy, cz);
+              } else if (force) {
+                this.rebuildChunkAt(cx, cy, cz);
+              }
+            }
+          }
+        }
+
+        for (const [key, chunk] of this.chunks) {
+          if (!required.has(key)) {
+            const dx = chunk.cx - baseCx;
+            const dz = chunk.cz - baseCz;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            if (distance > radius + CONFIG.REMOVAL_BUFFER) {
+              this.removeChunk(key);
+            }
+          }
+        }
+      }
+
+      update(playerPosition) {
+        this.refreshChunks(playerPosition, this.forceRefresh);
+        if (this.forceRefresh) {
+          this.forceRefresh = false;
+        }
+      }
+
+      toggleRenderDistance() {
+        if (this.renderDistance === this.preferredRenderDistance) {
+          const reduced = Math.max(1, CONFIG.RENDER_DISTANCE_REDUCED);
+          this.renderDistance = reduced;
+        } else {
+          this.renderDistance = this.preferredRenderDistance;
+        }
+        this.forceRefresh = true;
+        return this.renderDistance;
+      }
+
+      setRenderDistance(distance) {
+        const parsed = Math.floor(distance);
+        if (!Number.isFinite(parsed)) {
+          return this.renderDistance;
+        }
+        const clamped = Math.max(1, parsed);
+        this.preferredRenderDistance = clamped;
+        this.renderDistance = clamped;
+        this.forceRefresh = true;
+        return this.renderDistance;
+      }
+    }
+
+    // --- Player controller ---------------------------------------------------------------------
+    class PlayerController {
+      constructor(camera, world) {
+        this.camera = camera;
+        this.world = world;
+        this.position = new THREE.Vector3(0, 40, 0);
+        this.velocity = new THREE.Vector3();
+        this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        this.yaw = 0;
+        this.pitch = 0;
+        this.radius = 0.3;
+        this.height = 1.8;
+        this.eyeHeight = 1.62;
+        this.enabled = false;
+        this.onGround = false;
+        this.spawnPoint = new THREE.Vector3();
+        this.lookSensitivity = 0.002;
+        this.move = {
+          forward: false,
+          backward: false,
+          left: false,
+          right: false,
+          run: false,
+          up: false,
+          down: false
+        };
+        this.isFlying = false;
+        this.tempVec = new THREE.Vector3();
+      }
+
+      setEnabled(value) {
+        this.enabled = value;
+        if (!value) {
+          this.move.forward = this.move.backward = false;
+          this.move.left = this.move.right = false;
+          this.move.run = false;
+          this.move.up = false;
+          this.move.down = false;
+        }
+      }
+
+
+      toggleFlight() {
+        this.isFlying = !this.isFlying;
+        this.move.up = false;
+        this.move.down = false;
+        if (this.isFlying) {
+          this.onGround = false;
+          this.velocity.set(0, 0, 0);
+        }
+        updateSunLight();
+        return this.isFlying;
+      }
+
+      setSpawn(x, y, z) {
+        this.spawnPoint.set(x, y, z);
+      }
+
+      setPosition(x, y, z) {
+        this.position.set(x, y, z);
+        this.velocity.set(0, 0, 0);
+        this.updateCamera();
+      }
+
+      updateCamera() {
+        this.euler.set(this.pitch, this.yaw, 0, 'YXZ');
+        this.camera.quaternion.setFromEuler(this.euler);
+        this.camera.position.set(
+          this.position.x,
+          this.position.y + this.eyeHeight,
+          this.position.z
+        );
+      }
+
+      onMouseMove(event) {
+        if (!this.enabled) return;
+        this.yaw -= event.movementX * this.lookSensitivity;
+        this.pitch -= event.movementY * this.lookSensitivity;
+        const limit = Math.PI / 2 - 0.01;
+        this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+      }
+
+      onKeyDown(event) {
+        if (!this.enabled) return;
+        switch (event.code) {
+          case 'KeyW':
+            this.move.forward = true;
+            event.preventDefault();
+            break;
+          case 'KeyS':
+            this.move.backward = true;
+            event.preventDefault();
+            break;
+          case 'KeyA':
+            this.move.left = true;
+            event.preventDefault();
+            break;
+          case 'KeyD':
+            this.move.right = true;
+            event.preventDefault();
+            break;
+          case 'ShiftLeft':
+          case 'ShiftRight':
+            this.move.run = true;
+            event.preventDefault();
+            break;
+          case 'ControlLeft':
+          case 'ControlRight':
+            if (this.isFlying) {
+              this.move.down = true;
+              event.preventDefault();
+            }
+            break;
+          case 'Space':
+            if (this.isFlying) {
+              this.move.up = true;
+            } else if (this.onGround) {
+              this.velocity.y = CONFIG.JUMP_VELOCITY;
+              this.onGround = false;
+            }
+            event.preventDefault();
+            break;
+        }
+      }
+
+
+      onKeyUp(event) {
+        switch (event.code) {
+          case 'KeyW': this.move.forward = false; break;
+          case 'KeyS': this.move.backward = false; break;
+          case 'KeyA': this.move.left = false; break;
+          case 'KeyD': this.move.right = false; break;
+          case 'ShiftLeft':
+          case 'ShiftRight':
+            this.move.run = false;
+            break;
+          case 'ControlLeft':
+          case 'ControlRight':
+            if (this.isFlying) {
+              this.move.down = false;
+            }
+            break;
+          case 'Space':
+            if (this.isFlying) {
+              this.move.up = false;
+            }
+            break;
+        }
+      }
+
+      moveAlongAxis(axis, delta) {
+        if (axis === 'x') {
+          this.position.x += this.velocity.x * delta;
+        } else if (axis === 'y') {
+          this.position.y += this.velocity.y * delta;
+        } else if (axis === 'z') {
+          this.position.z += this.velocity.z * delta;
+        }
+        this.resolveCollisions(axis);
+      }
+
+      resolveCollisions(axis) {
+        const radius = this.radius;
+        const height = this.height;
+        const epsilon = 0.0005;
+
+        const playerMinX = this.position.x - radius;
+        const playerMaxX = this.position.x + radius;
+        const playerMinY = this.position.y;
+        const playerMaxY = this.position.y + height;
+        const playerMinZ = this.position.z - radius;
+        const playerMaxZ = this.position.z + radius;
+
+        const minX = Math.floor(playerMinX);
+        const maxX = Math.floor(playerMaxX);
+        const minY = Math.floor(playerMinY);
+        const maxY = Math.floor(playerMaxY);
+        const minZ = Math.floor(playerMinZ);
+        const maxZ = Math.floor(playerMaxZ);
+
+        for (let x = minX; x <= maxX; x++) {
+          for (let y = minY; y <= maxY; y++) {
+            for (let z = minZ; z <= maxZ; z++) {
+              const blockId = this.world.getBlock(x, y, z);
+              if (!BLOCK_DEFS[blockId].solid) continue;
+
+              const blockMinX = x;
+              const blockMaxX = x + 1;
+              const blockMinY = y;
+              const blockMaxY = y + 1;
+              const blockMinZ = z;
+              const blockMaxZ = z + 1;
+
+              const intersects = (
+                playerMaxX > blockMinX &&
+                playerMinX < blockMaxX &&
+                playerMaxY > blockMinY &&
+                playerMinY < blockMaxY &&
+                playerMaxZ > blockMinZ &&
+                playerMinZ < blockMaxZ
+              );
+
+              if (!intersects) continue;
+
+              if (axis === 'x') {
+                if (this.velocity.x > 0) {
+                  this.position.x = blockMinX - radius - epsilon;
+                } else if (this.velocity.x < 0) {
+                  this.position.x = blockMaxX + radius + epsilon;
+                }
+                this.velocity.x = 0;
+                return;
+              }
+
+              if (axis === 'y') {
+                if (this.velocity.y > 0) {
+                  this.position.y = blockMinY - height - epsilon;
+                  this.velocity.y = 0;
+                } else if (this.velocity.y < 0) {
+                  this.position.y = blockMaxY + epsilon;
+                  this.velocity.y = 0;
+                  this.onGround = true;
+                }
+                return;
+              }
+
+              if (axis === 'z') {
+                if (this.velocity.z > 0) {
+                  this.position.z = blockMinZ - radius - epsilon;
+                } else if (this.velocity.z < 0) {
+                  this.position.z = blockMaxZ + radius + epsilon;
+                }
+                this.velocity.z = 0;
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      update(delta) {
+        if (!this.enabled) {
+          this.updateCamera();
+          return;
+        }
+
+        if (this.isFlying) {
+          const moveVec = this.tempVec;
+          moveVec.set(0, 0, 0);
+          if (this.move.forward) moveVec.z -= 1;
+          if (this.move.backward) moveVec.z += 1;
+          if (this.move.left) moveVec.x -= 1;
+          if (this.move.right) moveVec.x += 1;
+
+          const speed = CONFIG.FLY_SPEED * (this.move.run ? CONFIG.RUN_MULTIPLIER : 1);
+          if (moveVec.lengthSq() > 0) {
+            moveVec.normalize();
+            TMP_EULER.set(0, this.yaw, 0);
+            TMP_QUATERNION.setFromEuler(TMP_EULER);
+            moveVec.applyQuaternion(TMP_QUATERNION);
+            this.velocity.x = moveVec.x * speed;
+            this.velocity.z = moveVec.z * speed;
+          } else {
+            this.velocity.x = 0;
+            this.velocity.z = 0;
+          }
+
+          let vertical = 0;
+          if (this.move.up) vertical += 1;
+          if (this.move.down) vertical -= 1;
+          this.velocity.y = vertical !== 0 ? vertical * speed : 0;
+
+          this.onGround = false;
+          this.moveAlongAxis('x', delta);
+          this.moveAlongAxis('z', delta);
+          this.moveAlongAxis('y', delta);
+
+          this.updateCamera();
+          return;
+        }
+
+        // Integrate gravity and clamp downward speed.
+        this.velocity.y -= CONFIG.GRAVITY * delta;
+        if (this.velocity.y < -CONFIG.TERMINAL_VELOCITY) {
+          this.velocity.y = -CONFIG.TERMINAL_VELOCITY;
+        }
+
+        // Build a movement vector from WASD input relative to camera yaw.
+        const moveVec = this.tempVec;
+        moveVec.set(0, 0, 0);
+        if (this.move.forward) moveVec.z -= 1;
+        if (this.move.backward) moveVec.z += 1;
+        if (this.move.left) moveVec.x -= 1;
+        if (this.move.right) moveVec.x += 1;
+
+        if (moveVec.lengthSq() > 0) {
+          moveVec.normalize();
+          const speed = CONFIG.MOVE_SPEED * (this.move.run ? CONFIG.RUN_MULTIPLIER : 1);
+          TMP_EULER.set(0, this.yaw, 0);
+          TMP_QUATERNION.setFromEuler(TMP_EULER);
+          moveVec.applyQuaternion(TMP_QUATERNION);
+          this.velocity.x = moveVec.x * speed;
+          this.velocity.z = moveVec.z * speed;
+        } else {
+          this.velocity.x = 0;
+          this.velocity.z = 0;
+        }
+
+        // Axis-separated collisions keep the player aligned to the voxel grid.
+        this.onGround = false;
+        this.moveAlongAxis('x', delta);
+        this.moveAlongAxis('z', delta);
+        this.moveAlongAxis('y', delta);
+
+        // Simple fail-safe: respawn near spawn if we fall out of the world.
+        if (this.position.y < -10 && this.spawnPoint) {
+          this.setPosition(this.spawnPoint.x, this.spawnPoint.y, this.spawnPoint.z);
+        }
+
+        this.updateCamera();
+      }
+
+
+      intersectsBlock(x, y, z) {
+        const radius = this.radius;
+        const height = this.height;
+        const blockMinX = x;
+        const blockMaxX = x + 1;
+        const blockMinY = y;
+        const blockMaxY = y + 1;
+        const blockMinZ = z;
+        const blockMaxZ = z + 1;
+
+        const playerMinX = this.position.x - radius;
+        const playerMaxX = this.position.x + radius;
+        const playerMinY = this.position.y;
+        const playerMaxY = this.position.y + height;
+        const playerMinZ = this.position.z - radius;
+        const playerMaxZ = this.position.z + radius;
+
+        return (
+          playerMaxX > blockMinX && playerMinX < blockMaxX &&
+          playerMaxY > blockMinY && playerMinY < blockMaxY &&
+          playerMaxZ > blockMinZ && playerMinZ < blockMaxZ
+        );
+      }
+    }
+
+    // --- Block interaction (raycasting, build/break) --------------------------------------------
+    class BlockInteraction {
+      constructor(camera, world, player, highlightMesh, damageOverlay, showMessage, hotbarSlots) {
+        this.camera = camera;
+        this.world = world;
+        this.player = player;
+        this.highlight = highlightMesh;
+        this.damageOverlay = damageOverlay;
+        this.showMessage = showMessage;
+        this.hotbarSlots = hotbarSlots;
+        this.hotbarItems = HOTBAR_ITEMS;
+        this.selectedIndex = 0;
+        this.currentTarget = null;
+        this.enabled = false;
+        this.lastActionTime = 0;
+        this.breakState = null;
+        this.mouseButtons = [false, false, false];
+        this.raycaster = new THREE.Raycaster();
+        this.rayDirection = new THREE.Vector3();
+
+        this.updateHotbar();
+      }
+
+      setEnabled(value) {
+        this.enabled = value;
+        if (!value) {
+          this.mouseButtons[0] = false;
+          this.mouseButtons[1] = false;
+          this.mouseButtons[2] = false;
+          this.clearBreakingState();
+          this.currentTarget = null;
+          this.highlight.visible = false;
+        }
+      }
+
+      clearBreakingState() {
+        this.breakState = null;
+        this.damageOverlay.hide();
+      }
+
+      cancelBreaking() {
+        this.mouseButtons[0] = false;
+        this.clearBreakingState();
+      }
+
+      updateHotbar() {
+        this.hotbarSlots.forEach((slot, index) => {
+          const blockId = this.hotbarItems[index];
+          const label = slot.querySelector('.label');
+          if (label) {
+            label.textContent = BLOCK_DEFS[blockId].name;
+          }
+          slot.style.background = HOTBAR_COLORS[blockId] || '#777';
+          slot.classList.toggle('selected', index === this.selectedIndex);
+        });
+      }
+
+      setSelectedIndex(index) {
+        if (index < 0) index = this.hotbarItems.length - 1;
+        if (index >= this.hotbarItems.length) index = 0;
+        if (this.selectedIndex === index) return;
+        this.selectedIndex = index;
+        this.updateHotbar();
+        this.showMessage(`Selected ${BLOCK_DEFS[this.hotbarItems[this.selectedIndex]].name}`, 1400);
+      }
+
+      cycleSelection(step) {
+        this.setSelectedIndex((this.selectedIndex + step + this.hotbarItems.length) % this.hotbarItems.length);
+      }
+
+      onNumberKey(code) {
+        if (!this.enabled) return;
+        const num = parseInt(code.replace('Digit', ''), 10);
+        if (!Number.isNaN(num) && num >= 1 && num <= this.hotbarItems.length) {
+          this.setSelectedIndex(num - 1);
+        }
+      }
+
+      onWheel(deltaY) {
+        if (!this.enabled) return;
+        const step = deltaY > 0 ? 1 : -1;
+        this.cycleSelection(step);
+      }
+
+      onMouseDown(event) {
+        if (!this.enabled) return;
+        if (typeof this.mouseButtons[event.button] === 'boolean') {
+          this.mouseButtons[event.button] = true;
+        }
+        if (event.button === 0) {
+          event.preventDefault();
+          this.beginBreak(performance.now());
+        } else if (event.button === 2) {
+          event.preventDefault();
+          const now = performance.now();
+          if (now - this.lastActionTime < CONFIG.ACTION_COOLDOWN_MS) return;
+          const acted = this.tryPlace();
+          if (acted) {
+            this.lastActionTime = now;
+          }
+        }
+      }
+
+      onMouseUp(event) {
+        if (typeof this.mouseButtons[event.button] === 'boolean') {
+          this.mouseButtons[event.button] = false;
+        }
+        if (event.button === 0) {
+          this.clearBreakingState();
+        }
+      }
+
+      beginBreak(now) {
+        if (!this.mouseButtons[0]) return;
+        const target = this.currentTarget;
+        if (!target || target.blockId === BLOCK.AIR) {
+          this.clearBreakingState();
+          return;
+        }
+        const def = BLOCK_DEFS[target.blockId] || BLOCK_DEFS[BLOCK.AIR];
+        if (def && def.breakable === false) {
+          this.clearBreakingState();
+          return;
+        }
+        const rawDuration = def && typeof def.breakTime === 'number' ? def.breakTime : CONFIG.DEFAULT_BREAK_TIME_MS;
+        if (rawDuration <= 0) {
+          if (this.tryDestroy(target)) {
+            this.lastActionTime = now;
+          }
+          this.clearBreakingState();
+          return;
+        }
+        const duration = Math.max(16, rawDuration);
+        const key = `${target.position.x},${target.position.y},${target.position.z}`;
+        this.breakState = {
+          key,
+          blockId: target.blockId,
+          position: target.position.clone(),
+          startedAt: now,
+          duration
+        };
+        this.damageOverlay.setProgress(target.position, 0);
+      }
+
+      syncBreakState(now) {
+        if (!this.mouseButtons[0]) {
+          if (this.breakState) {
+            this.clearBreakingState();
+          } else {
+            this.damageOverlay.hide();
+          }
+          return;
+        }
+
+        const target = this.currentTarget;
+        if (!target || target.blockId === BLOCK.AIR) {
+          this.clearBreakingState();
+          return;
+        }
+
+        const key = `${target.position.x},${target.position.y},${target.position.z}`;
+        if (!this.breakState || this.breakState.key !== key || this.breakState.blockId !== target.blockId) {
+          this.beginBreak(now);
+          return;
+        }
+
+        const elapsed = now - this.breakState.startedAt;
+        const duration = Math.max(16, this.breakState.duration);
+        const progress = elapsed / duration;
+        this.damageOverlay.setProgress(target.position, progress);
+        if (progress >= 1) {
+          const completed = this.breakState;
+          this.clearBreakingState();
+          const destroyed = this.tryDestroy({ blockId: completed.blockId, position: completed.position });
+          if (destroyed) {
+            this.lastActionTime = now;
+            this.currentTarget = null;
+            this.highlight.visible = false;
+          }
+        }
+      }
+
+      tryDestroy(target = this.currentTarget) {
+        if (!target) return false;
+        const blockId = target.blockId;
+        if (blockId === BLOCK.AIR) return false;
+        const pos = target.position;
+        const changed = this.world.setBlock(pos.x, pos.y, pos.z, BLOCK.AIR);
+        if (changed) {
+          this.showMessage(`Broke ${BLOCK_DEFS[blockId].name}`, 1400);
+        }
+        return changed;
+      }
+
+      tryPlace() {
+        if (!this.currentTarget) return false;
+        const blockId = this.hotbarItems[this.selectedIndex];
+        if (blockId === BLOCK.AIR) return false;
+
+        const placePos = this.currentTarget.position.clone().add(this.currentTarget.normal).round();
+        if (placePos.y < 0 || placePos.y >= CONFIG.CHUNK_HEIGHT) return false;
+
+        const existing = this.world.getBlock(placePos.x, placePos.y, placePos.z);
+        if (existing !== BLOCK.AIR) return false;
+
+        if (this.player.intersectsBlock(placePos.x, placePos.y, placePos.z)) {
+          this.showMessage('Cannot place inside the player', 1200);
+          return false;
+        }
+
+        const placed = this.world.setBlock(placePos.x, placePos.y, placePos.z, blockId);
+        if (placed) {
+          this.showMessage(`Placed ${BLOCK_DEFS[blockId].name}`, 1400);
+        }
+        return placed;
+      }
+
+      update() {
+        const now = performance.now();
+        if (!this.enabled) {
+          this.highlight.visible = false;
+          this.currentTarget = null;
+          this.syncBreakState(now);
+          return;
+        }
+
+        // Cast a ray from the camera to find the targeted block within reach.
+        this.camera.getWorldDirection(this.rayDirection).normalize();
+        this.raycaster.set(this.camera.position, this.rayDirection);
+        this.raycaster.far = CONFIG.RAYCAST_DISTANCE;
+
+        const hits = this.raycaster.intersectObjects(this.world.getRaycastObjects(), false);
+        if (hits.length === 0) {
+          this.highlight.visible = false;
+          this.currentTarget = null;
+          this.syncBreakState(now);
+          return;
+        }
+
+        const hit = hits[0];
+        const point = hit.point.clone();
+        const normalMatrix = TMP_NORMAL_MATRIX;
+        normalMatrix.getNormalMatrix(hit.object.matrixWorld);
+        const faceNormal = hit.face.normal.clone().applyMatrix3(normalMatrix);
+        faceNormal.set(Math.sign(faceNormal.x), Math.sign(faceNormal.y), Math.sign(faceNormal.z));
+        point.addScaledVector(faceNormal, -0.01);
+
+        const blockPos = new THREE.Vector3(
+          Math.floor(point.x),
+          Math.floor(point.y),
+          Math.floor(point.z)
+        );
+        const blockId = this.world.getBlock(blockPos.x, blockPos.y, blockPos.z);
+        if (blockId === BLOCK.AIR) {
+          this.highlight.visible = false;
+          this.currentTarget = null;
+          this.syncBreakState(now);
+          return;
+        }
+
+        this.highlight.visible = true;
+        this.highlight.position.set(blockPos.x + 0.5, blockPos.y + 0.5, blockPos.z + 0.5);
+
+        this.currentTarget = {
+          position: blockPos,
+          normal: faceNormal,
+          blockId
+        };
+
+        this.syncBreakState(now);
+      }
+    }
+
+
+    // --- Procedural textures -------------------------------------------------------------------
+    function buildTextureAtlas() {
+      // Build a small atlas of 16x16 procedural textures for each block face at runtime.
+      const tileSize = 16;
+      const tileSet = new Set();
+      for (const def of BLOCK_DEFS) {
+        if (!def) continue;
+        for (const face of def.faces) {
+          if (face) tileSet.add(face);
+        }
+      }
+      const tiles = Array.from(tileSet);
+      const cols = Math.ceil(Math.sqrt(tiles.length));
+      const rows = Math.ceil(tiles.length / cols);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cols * tileSize;
+      canvas.height = rows * tileSize;
+      const ctx = canvas.getContext('2d');
+      const rng = createSeededRandom(CONFIG.WORLD_SEED * 977);
+
+      const generators = {
+        [TILE.GRASS_TOP]: (ctx, s) => {
+          ctx.fillStyle = '#3d8b3d';
+          ctx.fillRect(0, 0, s, s);
+          for (let i = 0; i < 100; i++) {
+            const shade = 120 + Math.floor(rng() * 60);
+            ctx.fillStyle = `rgb(${shade * 0.55}, ${shade}, ${shade * 0.55})`;
+            ctx.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 1, 1);
+          }
+        },
+        [TILE.GRASS_SIDE]: (ctx, s) => {
+          const turfHeight = Math.floor(s * 0.35);
+          ctx.fillStyle = '#6b4c2a';
+          ctx.fillRect(0, 0, s, s);
+          ctx.fillStyle = '#4b7a32';
+          ctx.fillRect(0, 0, s, turfHeight);
+          ctx.fillStyle = '#6b4c2a';
+          ctx.fillRect(0, turfHeight, s, s - turfHeight);
+          for (let i = 0; i < 80; i++) {
+            ctx.fillStyle = `rgba(90, ${120 + Math.floor(rng() * 50)}, 70, 0.6)`;
+            ctx.fillRect(Math.floor(rng() * s), turfHeight + Math.floor(rng() * (s - turfHeight)), 1, 1);
+          }
+        },
+        [TILE.DIRT]: (ctx, s) => {
+          ctx.fillStyle = '#6e4321';
+          ctx.fillRect(0, 0, s, s);
+          for (let i = 0; i < 80; i++) {
+            const shade = 70 + Math.floor(rng() * 50);
+            ctx.fillStyle = `rgba(${shade}, ${shade * 0.7}, ${shade * 0.4}, 0.7)`;
+            ctx.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 1, 1);
+          }
+        },
+        [TILE.STONE]: (ctx, s) => {
+          ctx.fillStyle = '#8a8a8a';
+          ctx.fillRect(0, 0, s, s);
+          for (let i = 0; i < 120; i++) {
+            const shade = 100 + Math.floor(rng() * 80);
+            ctx.fillStyle = `rgba(${shade}, ${shade}, ${shade}, 0.6)`;
+            ctx.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 1, 1);
+          }
+        },
+        [TILE.WOOD_SIDE]: (ctx, s) => {
+          ctx.fillStyle = '#8e6431';
+          ctx.fillRect(0, 0, s, s);
+          ctx.globalAlpha = 0.35;
+          ctx.fillStyle = '#c29456';
+          ctx.fillRect(0, 0, s, s);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = 'rgba(60, 36, 12, 0.7)';
+          ctx.lineWidth = 1.5;
+          for (let x = 1; x < s; x += 4) {
+            ctx.beginPath();
+            ctx.moveTo(x + rng() * 0.6, 0);
+            ctx.lineTo(x - rng() * 0.6, s);
+            ctx.stroke();
+          }
+          for (let i = 0; i < 30; i++) {
+            ctx.fillStyle = `rgba(60, 35, 12, ${0.3 + rng() * 0.4})`;
+            ctx.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 1, 1);
+          }
+        },
+        [TILE.WOOD_TOP]: (ctx, s) => {
+          ctx.fillStyle = '#b88f53';
+          ctx.fillRect(0, 0, s, s);
+          ctx.strokeStyle = '#8f693d';
+          ctx.lineWidth = 1;
+          for (let r = s / 2; r > 2; r -= 3) {
+            ctx.beginPath();
+            ctx.arc(s / 2, s / 2, r + rng() * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        },
+        [TILE.LEAVES]: (ctx, s) => {
+          ctx.clearRect(0, 0, s, s);
+          for (let i = 0; i < 160; i++) {
+            const shade = 90 + Math.floor(rng() * 60);
+            ctx.fillStyle = `rgba(${shade * 0.45}, ${shade}, ${shade * 0.45}, ${0.35 + rng() * 0.5})`;
+            const x = rng() * s;
+            const y = rng() * s;
+            const r = rng() * 2 + 1;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        },
+        [TILE.SAND]: (ctx, s) => {
+          ctx.fillStyle = '#d9ca8f';
+          ctx.fillRect(0, 0, s, s);
+          for (let i = 0; i < 80; i++) {
+            const shade = 190 + Math.floor(rng() * 40);
+            ctx.fillStyle = `rgba(${shade}, ${shade - 10}, ${shade - 30}, 0.6)`;
+            ctx.fillRect(Math.floor(rng() * s), Math.floor(rng() * s), 1, 1);
+          }
+        }
+      };
+
+      const uvMap = {};
+      tiles.forEach((name, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        ctx.save();
+        ctx.translate(col * tileSize, row * tileSize);
+        const generator = generators[name];
+        if (generator) {
+          generator(ctx, tileSize);
+        } else {
+          ctx.fillStyle = '#ff00ff';
+          ctx.fillRect(0, 0, tileSize, tileSize);
+        }
+        ctx.restore();
+
+        const pad = 0.5;
+        const u0 = (col * tileSize + pad) / canvas.width;
+        const v0 = 1 - ((row + 1) * tileSize - pad) / canvas.height;
+        const u1 = ((col + 1) * tileSize - pad) / canvas.width;
+        const v1 = 1 - (row * tileSize + pad) / canvas.height;
+        uvMap[name] = { u0, v0, u1, v1 };
+      });
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.generateMipmaps = false;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.needsUpdate = true;
+
+      return { texture, uvs: uvMap };
+    }
+
+    // --- UI helpers -----------------------------------------------------------------------------
+    function createHotbar(hotbarElement) {
+      const slots = [];
+      for (let i = 0; i < HOTBAR_ITEMS.length; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'hotbar-slot';
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = 'Block';
+        slot.appendChild(label);
+        const indexBadge = document.createElement('span');
+        indexBadge.className = 'index';
+        indexBadge.textContent = `${i + 1}`;
+        slot.appendChild(indexBadge);
+        hotbarElement.appendChild(slot);
+        slots.push(slot);
+      }
+      return slots;
+    }
+
+    function createMessageSystem(element, defaultText) {
+      let timeoutId = null;
+      return {
+        show(text, duration = 2000) {
+          element.textContent = text;
+          if (timeoutId) clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            element.textContent = defaultText;
+            timeoutId = null;
+          }, duration);
+        },
+        reset() {
+          if (timeoutId) clearTimeout(timeoutId);
+          timeoutId = null;
+          element.textContent = defaultText;
+        }
+      };
+    }
+
+    function createDamageTextures(stageCount) {
+      const textures = [];
+      const size = 32;
+      const segments = [
+        [16, 4, 16, 28],
+        [16, 16, 6, 12],
+        [16, 16, 26, 12],
+        [16, 16, 8, 24],
+        [16, 16, 24, 24],
+        [12, 10, 6, 6],
+        [20, 10, 26, 6],
+        [12, 22, 6, 28],
+        [20, 22, 26, 28],
+        [10, 16, 4, 18],
+        [22, 16, 28, 18],
+        [16, 8, 12, 2],
+        [16, 8, 20, 2]
+      ];
+      const rng = createSeededRandom(CONFIG.WORLD_SEED * 1337 + 42);
+      for (let i = 0; i < stageCount; i++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, size, size);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        const intensity = (i + 1) / stageCount;
+        const segmentCount = Math.max(3, Math.floor(segments.length * intensity));
+        ctx.strokeStyle = `rgba(18, 18, 18, ${0.25 + intensity * 0.65})`;
+        ctx.lineWidth = 1.1 + intensity * 1.0;
+
+        for (let j = 0; j < segmentCount; j++) {
+          const seg = segments[j % segments.length];
+          const jitter = (v) => v + (rng() - 0.5) * 3 * intensity;
+          ctx.beginPath();
+          ctx.moveTo(jitter(seg[0]), jitter(seg[1]));
+          ctx.lineTo(jitter(seg[2]), jitter(seg[3]));
+          ctx.stroke();
+        }
+
+        const shardCount = Math.floor(6 + intensity * 8);
+        ctx.fillStyle = `rgba(12, 12, 12, ${0.18 + intensity * 0.45})`;
+        for (let s = 0; s < shardCount; s++) {
+          const x = 16 + (rng() - 0.5) * 18;
+          const y = 16 + (rng() - 0.5) * 18;
+          const radius = Math.max(0.5, 1.2 - intensity * 0.4);
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.needsUpdate = true;
+        textures.push(texture);
+      }
+      return textures;
+    }
+
+    function createDamageOverlay(stageCount) {
+      const textures = createDamageTextures(stageCount);
+      const geometry = new THREE.BoxGeometry(1.01, 1.01, 1.01);
+      const material = new THREE.MeshBasicMaterial({
+        transparent: true,
+        depthWrite: false,
+        opacity: 0,
+        polygonOffset: true,
+        polygonOffsetFactor: -0.6,
+        polygonOffsetUnits: -0.6
+      });
+      material.map = textures[0];
+      material.needsUpdate = true;
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.visible = false;
+      mesh.renderOrder = 9998;
+
+      let currentStage = -1;
+
+      return {
+        mesh,
+        setProgress(position, progress) {
+          const clamped = Math.max(0, Math.min(1, progress));
+          const scaled = Math.min(0.999, clamped);
+          const stage = Math.floor(scaled * textures.length);
+          if (stage !== currentStage) {
+            material.map = textures[stage];
+            material.needsUpdate = true;
+            currentStage = stage;
+          }
+          material.opacity = 0.35 + clamped * 0.65;
+          mesh.visible = true;
+          mesh.position.set(position.x + 0.5, position.y + 0.5, position.z + 0.5);
+        },
+        hide() {
+          if (!mesh.visible && currentStage === -1) return;
+          mesh.visible = false;
+          material.opacity = 0;
+          currentStage = -1;
+        }
+      };
+    }
+
+    function createHighlightMesh() {
+      const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.002, 1.002, 1.002));
+      const material = new THREE.LineBasicMaterial({
+        color: 0xffff88,
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false
+      });
+      const mesh = new THREE.LineSegments(geometry, material);
+      mesh.visible = false;
+      mesh.renderOrder = 9999;
+      return mesh;
+    }
+
+    // --- Main bootstrap ------------------------------------------------------------------------
+    const overlay = document.getElementById('overlay');
+    const startButton = document.getElementById('startButton');
+    const hud = document.getElementById('hud');
+    const messageElement = document.getElementById('message');
+    const fpsElement = document.getElementById('fps');
+    const hotbarElement = document.getElementById('hotbar');
+    const renderToggleButton = document.getElementById('renderToggle');
+    const settingsButton = document.getElementById('settingsButton');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const renderDistanceInput = document.getElementById('renderDistanceInput');
+    const renderDistanceApply = document.getElementById('renderDistanceApply');
+    const aoToggle = document.getElementById('aoToggle');
+    const aoStrengthInput = document.getElementById('aoStrengthInput');
+    const aoStrengthValue = document.getElementById('aoStrengthValue');
+    const settingsCloseButton = document.getElementById('settingsClose');
+    const cloudToggle = document.getElementById('cloudToggle');
+    const cloudQualitySelect = document.getElementById('cloudQuality');
+    const cloudCoverageInput = document.getElementById('cloudCoverage');
+    const cloudCoverageValue = document.getElementById('cloudCoverageValue');
+    const cloudDensityInput = document.getElementById('cloudDensity');
+    const cloudDensityValue = document.getElementById('cloudDensityValue');
+    const cloudWindInput = document.getElementById('cloudWind');
+    const cloudWindValue = document.getElementById('cloudWindValue');
+    const defaultMessage = messageElement.textContent;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x87ceeb, 1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.autoClear = false;
+    renderer.domElement.style.position = 'fixed';
+    renderer.domElement.style.top = '0';
+    renderer.domElement.style.left = '0';
+    renderer.domElement.style.width = '100vw';
+    renderer.domElement.style.height = '100vh';
+    renderer.domElement.id = 'voxel-canvas';
+    renderer.domElement.tabIndex = 0;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x87ceeb, 70, 220);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 400);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    scene.add(ambientLight);
+    const sunLight = new THREE.DirectionalLight(0xfff4d6, 0.9);
+    sunLight.position.copy(SUN_LIGHT_OFFSET);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(CONFIG.SHADOW_MAP_SIZE, CONFIG.SHADOW_MAP_SIZE);
+    sunLight.shadow.bias = CONFIG.SHADOW_BIAS;
+    sunLight.shadow.normalBias = CONFIG.SHADOW_NORMAL_BIAS;
+    sunLight.shadow.radius = CONFIG.SHADOW_RADIUS;
+    const shadowExtent = CONFIG.SHADOW_CAMERA_EXTENT;
+    sunLight.shadow.camera.near = CONFIG.SHADOW_CAMERA_NEAR;
+    sunLight.shadow.camera.far = CONFIG.SHADOW_CAMERA_FAR;
+    sunLight.shadow.camera.left = -shadowExtent;
+    sunLight.shadow.camera.right = shadowExtent;
+    sunLight.shadow.camera.top = shadowExtent;
+    sunLight.shadow.camera.bottom = -shadowExtent;
+    sunLight.shadow.camera.updateProjectionMatrix();
+    scene.add(sunLight);
+    const sunLightTarget = new THREE.Object3D();
+    scene.add(sunLightTarget);
+    sunLight.target = sunLightTarget;
+
+    const atlasInfo = buildTextureAtlas();
+    const world = new World(scene, atlasInfo, settings);
+    const highlightMesh = createHighlightMesh();
+    highlightMesh.castShadow = false;
+    highlightMesh.receiveShadow = false;
+    scene.add(highlightMesh);
+
+    const damageOverlay = createDamageOverlay(CONFIG.BREAK_STAGE_COUNT);
+    damageOverlay.mesh.castShadow = false;
+    damageOverlay.mesh.receiveShadow = false;
+    scene.add(damageOverlay.mesh);
+
+    const player = new PlayerController(camera, world);
+
+    const cloudUniforms = {
+      iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      iTime: { value: 0 },
+      camPos: { value: new THREE.Vector3() },
+      camMatrix: { value: new THREE.Matrix4() },
+      projMatrixInv: { value: new THREE.Matrix4() },
+      sunDir: { value: new THREE.Vector3(SUN_LIGHT_DIRECTION.x, SUN_LIGHT_DIRECTION.y, SUN_LIGHT_DIRECTION.z) },
+      coverage: { value: settings.clouds.coverage },
+      density: { value: settings.clouds.density },
+      wind: { value: new THREE.Vector2(
+        CLOUD_WIND_DIRECTION.x * settings.clouds.windSpeed * CLOUD_WIND_SPEED_SCALE,
+        CLOUD_WIND_DIRECTION.z * settings.clouds.windSpeed * CLOUD_WIND_SPEED_SCALE
+      ) },
+      quality: { value: (CLOUD_QUALITY_PRESETS[settings.clouds.quality] || CLOUD_QUALITY_PRESETS.medium).steps },
+      enableClouds: { value: settings.clouds.enabled ? 1 : 0 },
+      layerHeights: { value: new THREE.Vector2(CLOUD_LAYER_BOUNDS.min, CLOUD_LAYER_BOUNDS.max) }
+    };
+
+    const cloudScene = new THREE.Scene();
+    const cloudCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const cloudMaterial = new THREE.ShaderMaterial({
+      vertexShader: CLOUD_VERTEX_SHADER,
+      fragmentShader: CLOUD_FRAGMENT_SHADER,
+      uniforms: cloudUniforms,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false
+    });
+    const cloudQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), cloudMaterial);
+    cloudQuad.frustumCulled = false;
+    cloudScene.add(cloudQuad);
+
+    const updateSunLight = () => {
+      TMP_LIGHT_VEC.copy(player.position).add(SUN_LIGHT_OFFSET);
+      sunLight.position.copy(TMP_LIGHT_VEC);
+      sunLight.target.position.copy(player.position);
+      sunLight.target.updateMatrixWorld();
+    };
+
+
+    const hotbarSlots = createHotbar(hotbarElement);
+    const messageSystem = createMessageSystem(messageElement, defaultMessage);
+
+    const showMessage = (text, duration) => messageSystem.show(text, duration);
+    const blockInteraction = new BlockInteraction(camera, world, player, highlightMesh, damageOverlay, showMessage, hotbarSlots);
+
+    hotbarSlots.forEach((slot, index) => {
+      slot.addEventListener('click', () => blockInteraction.setSelectedIndex(index));
+      slot.addEventListener('contextmenu', (event) => event.preventDefault());
+    });
+
+    blockInteraction.updateHotbar();
+    const clampAO = (value) => {
+      if (!Number.isFinite(value)) return settings.aoStrength;
+      return Math.min(AO_STRENGTH_MAX, Math.max(0, value));
+    };
+    const formatAO = (value) => value.toFixed(2);
+    const syncAOControls = () => {
+      aoToggle.checked = settings.aoEnabled;
+      aoStrengthInput.max = String(AO_STRENGTH_MAX);
+      aoStrengthInput.value = formatAO(settings.aoStrength);
+      aoStrengthInput.disabled = !settings.aoEnabled;
+      aoStrengthValue.textContent = formatAO(settings.aoStrength);
+      aoStrengthValue.classList.toggle('disabled', !settings.aoEnabled);
+    };
+    const triggerAORebuild = () => {
+      world.refreshChunks(player.position, true);
+    };
+
+    const clamp01 = (value) => Math.min(1, Math.max(0, value));
+    const clampRange = (value, min, max) => Math.min(max, Math.max(min, value));
+    const parseNumber = (value, fallback) => {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const formatCloudValue = (value, decimals = 2) => value.toFixed(decimals);
+    const normalizeCloudQuality = (key) => (CLOUD_QUALITY_PRESETS[key] ? key : 'medium');
+    const getCloudQualityPreset = (key) => CLOUD_QUALITY_PRESETS[normalizeCloudQuality(key)];
+
+    const updateCloudUiState = () => {
+      const enabled = settings.clouds.enabled;
+      cloudQualitySelect.disabled = !enabled;
+      cloudCoverageInput.disabled = !enabled;
+      cloudDensityInput.disabled = !enabled;
+      cloudWindInput.disabled = !enabled;
+      cloudCoverageValue.classList.toggle('disabled', !enabled);
+      cloudDensityValue.classList.toggle('disabled', !enabled);
+      cloudWindValue.classList.toggle('disabled', !enabled);
+    };
+
+    const syncCloudControls = () => {
+      const cloudSettings = settings.clouds;
+      cloudSettings.quality = normalizeCloudQuality(cloudSettings.quality);
+      cloudToggle.checked = cloudSettings.enabled;
+      cloudQualitySelect.value = cloudSettings.quality;
+      cloudCoverageInput.value = cloudSettings.coverage.toFixed(2);
+      cloudCoverageValue.textContent = formatCloudValue(cloudSettings.coverage);
+      cloudDensityInput.value = cloudSettings.density.toFixed(2);
+      cloudDensityValue.textContent = formatCloudValue(cloudSettings.density);
+      cloudWindInput.value = cloudSettings.windSpeed.toFixed(1);
+      cloudWindValue.textContent = formatCloudValue(cloudSettings.windSpeed, 1);
+      updateCloudUiState();
+    };
+
+    const updateRenderDistanceLabel = () => {
+      renderToggleButton.textContent = `Render Distance: ${world.renderDistance}`;
+    };
+
+    const syncRenderDistanceInput = () => {
+      renderDistanceInput.value = String(world.preferredRenderDistance ?? world.renderDistance);
+    };
+
+    const closeSettings = () => {
+      settingsPanel.classList.remove('open');
+      renderDistanceInput.blur();
+    };
+
+    const openSettings = () => {
+      syncRenderDistanceInput();
+      syncAOControls();
+      syncCloudControls();
+      settingsPanel.classList.add('open');
+      renderDistanceInput.focus();
+      renderDistanceInput.select();
+    };
+
+    const applyRenderDistance = () => {
+      const parsed = parseInt(renderDistanceInput.value, 10);
+      if (!Number.isFinite(parsed)) {
+        syncRenderDistanceInput();
+        return;
+      }
+      const updated = world.setRenderDistance(parsed);
+      syncRenderDistanceInput();
+      updateRenderDistanceLabel();
+      world.refreshChunks(player.position, true);
+      closeSettings();
+      showMessage(`Render distance set to ${updated}`, 1500);
+    };
+
+    updateRenderDistanceLabel();
+    syncRenderDistanceInput();
+    syncAOControls();
+    syncCloudControls();
+
+    const spawnX = 0;
+    const spawnZ = 0;
+    const spawnY = world.generator.getHeightAt(spawnX, spawnZ) + 3;
+    const spawnPoint = new THREE.Vector3(spawnX + 0.5, spawnY, spawnZ + 0.5);
+    player.setSpawn(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+    player.setPosition(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+    updateSunLight();
+    world.refreshChunks(player.position, true);
+
+    const canvas = renderer.domElement;
+
+    function toggleHud() {
+      hud.classList.toggle('hidden');
+      const visible = !hud.classList.contains('hidden');
+      messageSystem.show(visible ? 'HUD shown' : 'HUD hidden', 1200);
+    }
+
+    startButton.addEventListener('click', () => {
+      closeSettings();
+      canvas.requestPointerLock();
+    });
+
+    canvas.addEventListener('click', () => {
+      if (document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      }
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+      const locked = document.pointerLockElement === canvas;
+      overlay.style.display = locked ? 'none' : 'flex';
+      player.setEnabled(locked);
+      blockInteraction.setEnabled(locked);
+      hud.style.opacity = locked ? 1 : 0.85;
+      if (!locked) {
+        highlightMesh.visible = false;
+        messageSystem.reset();
+        syncRenderDistanceInput();
+      } else {
+        closeSettings();
+        showMessage('Pointer locked - have fun!', 1500);
+      }
+    });
+    document.addEventListener('pointerlockerror', () => {
+      overlay.style.display = 'flex';
+      showMessage('Pointer lock failed - click Start again.', 2000);
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      cloudUniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
+    });
+
+    document.addEventListener('contextmenu', (event) => event.preventDefault());
+    canvas.addEventListener('mousemove', (event) => player.onMouseMove(event));
+    canvas.addEventListener('mousedown', (event) => blockInteraction.onMouseDown(event));
+    canvas.addEventListener('mouseup', (event) => blockInteraction.onMouseUp(event));
+    window.addEventListener('mouseup', (event) => blockInteraction.onMouseUp(event));
+    window.addEventListener('blur', () => blockInteraction.cancelBreaking());
+
+    window.addEventListener('keydown', (event) => {
+      if (event.code === 'KeyE') {
+        toggleHud();
+        event.preventDefault();
+        return;
+      }
+      if (event.code === 'KeyR') {
+        const current = world.toggleRenderDistance();
+        updateRenderDistanceLabel();
+        world.refreshChunks(player.position, true);
+        showMessage(`Render distance: ${current}`, 1500);
+        syncRenderDistanceInput();
+        event.preventDefault();
+        return;
+      }
+      if (event.code === 'KeyN') {
+        const flying = player.toggleFlight();
+        showMessage(flying ? 'Flight mode enabled' : 'Flight mode disabled', 1500);
+        event.preventDefault();
+        return;
+      }
+      if (event.code.startsWith('Digit')) {
+        blockInteraction.onNumberKey(event.code);
+        return;
+      }
+      player.onKeyDown(event);
+    });
+
+    window.addEventListener('keyup', (event) => {
+      player.onKeyUp(event);
+    });
+
+    window.addEventListener('wheel', (event) => {
+      if (!blockInteraction.enabled) return;
+      blockInteraction.onWheel(event.deltaY);
+      event.preventDefault();
+    }, { passive: false });
+
+    settingsButton.addEventListener('click', () => {
+      if (settingsPanel.classList.contains('open')) {
+        closeSettings();
+      } else {
+        openSettings();
+      }
+    });
+
+    settingsCloseButton.addEventListener('click', () => {
+      closeSettings();
+    });
+
+    renderDistanceApply.addEventListener('click', () => {
+      applyRenderDistance();
+    });
+
+    renderDistanceInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        applyRenderDistance();
+      }
+    });
+    aoToggle.addEventListener('change', () => {
+      settings.aoEnabled = aoToggle.checked;
+      syncAOControls();
+      triggerAORebuild();
+    });
+
+    aoStrengthInput.addEventListener('input', () => {
+      settings.aoStrength = clampAO(parseFloat(aoStrengthInput.value));
+      aoStrengthInput.value = formatAO(settings.aoStrength);
+      aoStrengthValue.textContent = formatAO(settings.aoStrength);
+    });
+
+    aoStrengthInput.addEventListener('change', () => {
+      settings.aoStrength = clampAO(parseFloat(aoStrengthInput.value));
+      aoStrengthInput.value = formatAO(settings.aoStrength);
+      aoStrengthValue.textContent = formatAO(settings.aoStrength);
+      if (settings.aoEnabled) {
+        triggerAORebuild();
+      }
+    });
+
+    cloudToggle.addEventListener('change', () => {
+      settings.clouds.enabled = cloudToggle.checked;
+      updateCloudUiState();
+    });
+
+    cloudQualitySelect.addEventListener('change', () => {
+      settings.clouds.quality = normalizeCloudQuality(cloudQualitySelect.value);
+      cloudQualitySelect.value = settings.clouds.quality;
+    });
+
+    cloudCoverageInput.addEventListener('input', () => {
+      const value = clamp01(parseNumber(cloudCoverageInput.value, settings.clouds.coverage));
+      settings.clouds.coverage = value;
+      cloudCoverageValue.textContent = formatCloudValue(value);
+    });
+
+    cloudDensityInput.addEventListener('input', () => {
+      const value = clampRange(parseNumber(cloudDensityInput.value, settings.clouds.density), 0, 1.5);
+      settings.clouds.density = value;
+      cloudDensityValue.textContent = formatCloudValue(value);
+    });
+
+    cloudWindInput.addEventListener('input', () => {
+      const value = clampRange(parseNumber(cloudWindInput.value, settings.clouds.windSpeed), 0, 12);
+      settings.clouds.windSpeed = value;
+      cloudWindValue.textContent = formatCloudValue(value, 1);
+    });
+
+    settingsPanel.addEventListener('click', (event) => {
+      if (event.target === settingsPanel) {
+        closeSettings();
+      }
+    });
+
+    renderToggleButton.addEventListener('click', () => {
+      const current = world.toggleRenderDistance();
+      updateRenderDistanceLabel();
+      world.refreshChunks(player.position, true);
+      showMessage(`Render distance: ${current}`, 1500);
+      syncRenderDistanceInput();
+    });
+
+    let fpsTimer = 0;
+    let frameCount = 0;
+    const clock = new THREE.Clock();
+    let accumulator = 0;
+    let cloudTime = 0;
+    let cloudBlend = settings.clouds.enabled ? 1 : 0;
+
+    function animate() {
+      // Fixed-step physics update paired with an uncapped render loop for smooth visuals.
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.1);
+      accumulator += delta;
+      cloudTime += delta;
+
+      while (accumulator >= CONFIG.FIXED_TIME_STEP) {
+        player.update(CONFIG.FIXED_TIME_STEP);
+        accumulator -= CONFIG.FIXED_TIME_STEP;
+      }
+
+      world.update(player.position);
+      blockInteraction.update();
+
+      updateSunLight();
+      camera.updateMatrixWorld();
+
+      const cloudSettings = settings.clouds;
+      const qualityPreset = getCloudQualityPreset(cloudSettings.quality);
+      const windScale = CLOUD_WIND_SPEED_SCALE;
+      cloudUniforms.iTime.value = cloudTime;
+      cloudUniforms.camPos.value.copy(camera.position);
+      cloudUniforms.camMatrix.value.copy(camera.matrixWorld);
+      cloudUniforms.projMatrixInv.value.copy(camera.projectionMatrixInverse);
+      cloudUniforms.coverage.value = cloudSettings.coverage;
+      cloudUniforms.density.value = cloudSettings.density;
+      cloudUniforms.quality.value = qualityPreset.steps;
+      cloudUniforms.wind.value.set(
+        CLOUD_WIND_DIRECTION.x * cloudSettings.windSpeed * windScale,
+        CLOUD_WIND_DIRECTION.z * cloudSettings.windSpeed * windScale
+      );
+
+      const targetBlend = cloudSettings.enabled ? 1 : 0;
+      const blendFactor = 1 - Math.exp(-5 * delta);
+      cloudBlend += (targetBlend - cloudBlend) * blendFactor;
+      if (Math.abs(cloudBlend - targetBlend) < 0.001) {
+        cloudBlend = targetBlend;
+      }
+      cloudUniforms.enableClouds.value = cloudBlend;
+
+      renderer.setRenderTarget(null);
+      renderer.clear();
+      renderer.render(cloudScene, cloudCamera);
+      renderer.clearDepth();
+      renderer.render(scene, camera);
+
+      fpsTimer += delta;
+      frameCount++;
+      if (fpsTimer >= 0.5) {
+        fpsElement.textContent = `FPS: ${(frameCount / fpsTimer).toFixed(0)}`;
+        fpsTimer = 0;
+        frameCount = 0;
+      }
+    }
+
+    animate();
+  })();
+  </script>
+</body>
+</html>
