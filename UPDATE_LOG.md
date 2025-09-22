@@ -2,6 +2,13 @@
 
 Most recent entries appear first. Dates use YYYY-MM-DD (ISO-8601)
 
+## v0.1.9 - 2025-09-19
+- Snapshot stored at 'v0.1.9/index.html'.
+- Reworked cloud raymarch with jittered stepping and fewer samples to cut GPU cost on high settings.
+- Reduced FBM octaves and tuned density blending to preserve structure with the lighter march.
+- Optimised terrain shadow projection to share the faster noise stack and early-outs when thin.
+- Updated quality presets so 'High' targets 56 steps instead of 80 while keeping visuals stable.
+
 ## v0.1.8 - 2025-09-19
 - Snapshot stored at 'v0.1.8/index.html'.
 - Volumetric cloud marching now darkens undersides, adds rim highlights, and improves absorption for richer lighting.
