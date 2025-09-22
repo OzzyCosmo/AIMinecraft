@@ -6,7 +6,7 @@ Main Tasks:
 - Research and create better lighting (AO + directional sky shading added in v0.1.4; next explore dynamic/global solutions)
 - Tools
 - Add block breaking audio/particle feedback
-- Volumetric cloud performance (v0.1.9 reduced march cost with jitter + lower presets; keep watching for artifacts)
+- Volumetric cloud performance (v0.1.10 streams FBM via 3D textures + adaptive marching; watch for tiling or low-end fallbacks)
 
 Creative Ideas (made by ai):
 - Seasonal biomes with temperature-based foliage changes

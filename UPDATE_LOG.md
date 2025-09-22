@@ -2,6 +2,13 @@
 
 Most recent entries appear first. Dates use YYYY-MM-DD (ISO-8601)
 
+## v0.1.10 - 2025-09-20
+- Snapshot stored at 'v0.1.10/index.html'.
+- Replaced procedural FBM in the cloud shader with precomputed 3D noise textures to slash raymarch ALU cost while preserving detail.
+- Added adaptive empty-space skipping and denser lighting fallbacks so high-quality marches converge in far fewer steps.
+- Mirrored the texture-driven sampling inside terrain cloud shadows for consistent shading and lower fragment workload.
+- Gated the new path behind WebGL2 checks and kept the legacy noise path as a fallback for older browsers.
+
 ## v0.1.9 - 2025-09-19
 - Snapshot stored at 'v0.1.9/index.html'.
 - Reworked cloud raymarch with jittered stepping and fewer samples to cut GPU cost on high settings.
